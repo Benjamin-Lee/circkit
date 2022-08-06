@@ -1,5 +1,5 @@
 [package]
-name = "circkit"
+name = "circkit-cli"
 version = "0.1.0"
 edition = "2021"
 authors = ["Benjamin D. Lee <benjamin.lee@chch.ox.ac.uk>"]
@@ -13,3 +13,9 @@ clap = { version = "3.2.15", features = ["derive"] }
 env_logger = "0.9.0"
 human-panic = "1.0.3"
 log = "0.4.17"
+circkit = { path = "lib" }
+rayon = "1.5"
+anyhow = "1.0"
+needletail = "0.4"
+
+[workspace]

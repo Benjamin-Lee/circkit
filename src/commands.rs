@@ -1,21 +1,17 @@
-use circkit::concatenate::{concatenate, deconcatenate};
 use clap::{Parser, Subcommand};
-use env_logger::Builder;
-use human_panic::setup_panic;
-use log::LevelFilter;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
-struct Cli {
+#[clap(name = "circkit", author, version, about, long_about = None)]
+pub struct Cli {
     #[clap(subcommand)]
-    command: Option<Commands>,
+    pub command: Option<Command>,
     // Level of verbosity.
     // #[clap(short, long, global = true)]
     // verbose: bool,
 }
-#[derive(Subcommand)]
-enum Commands {
+#[derive(Subcommand, Debug)]
+pub enum Command {
     /// find monomers of (potentially) circular or multimeric sequences
     Monomerize {
         #[clap(short, long, action)]
@@ -49,25 +45,18 @@ enum Commands {
         #[clap(short, long)]
         output: Option<PathBuf>,
     },
-}
 
-fn main() {
-    setup_panic!();
-
-    let cli = Cli::parse();
-
-    let mut builder = Builder::new();
-
-    builder.filter(None, LevelFilter::Info).init();
-
-    match &cli.command {
-        Some(Commands::Monomerize { .. }) => (),
-        Some(Commands::Cat { input, output }) => {
-            concatenate(input, output).unwrap();
-        }
-        Some(Commands::Decat { input, output }) => {
-            deconcatenate(input, output).expect("deconcatenation failed");
-        }
-        None => {}
-    }
+    /// Normalize circular sequences.
+    #[clap(
+        alias = "rotcanon",
+        visible_alias = "canonicalize",
+        visible_alias = "canon"
+    )]
+    Normalize {
+        /// FASTA file
+        input: Option<PathBuf>,
+        /// Output file. If not specified, output will be written to stdout.
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+    },
 }
