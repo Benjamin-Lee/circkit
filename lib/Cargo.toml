@@ -10,5 +10,4 @@ bio = "*"
 log = "0.4.17"
 
 [dev-dependencies]
-quickcheck = "1"
-quickcheck_macros = "1"
+pretty_assertions = "1"
