@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[clap(name = "circkit", author, version, about, long_about = None)]
 pub struct Cli {
     #[clap(subcommand)]
-    pub command: Option<Command>,
+    pub command: Command,
     // Level of verbosity.
     // #[clap(short, long, global = true)]
     // verbose: bool,
@@ -14,10 +14,11 @@ pub struct Cli {
 pub enum Command {
     /// find monomers of (potentially) circular or multimeric sequences
     Monomerize {
-        #[clap(short, long, action)]
-        overlap_required: bool,
-        /// normalize monomers
-        #[clap(short, long, action)]
+        input: Option<PathBuf>,
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+        /// Whether to canonicalize the monomers.
+        #[clap(short, long)]
         normalize: bool,
     },
     /// concatenate sequences to themselves
