@@ -54,17 +54,15 @@ pub fn monomerize(seq: &[u8], seed_length: usize, overlap_max_mismatch: u64) -> 
         // slice the potential overlap from the sequence
         let potential_overlap = &seq[last_match.unwrap_or(0)..occ + seed.len()];
 
+        // extend backward from the end of the sequence to the start of the potential overlap
+        let seed_extension = &seq[seq.len() - potential_overlap.len()..];
+
         // compare the potential overlap to the seed
-        let dist = hamming(
-            potential_overlap,
-            &seq[seq.len() - potential_overlap.len()..],
-        );
+        let dist = hamming(potential_overlap, seed_extension);
 
         // decide whether the overlap is good enough to be a monomer
         if dist <= overlap_max_mismatch {
             last_match = Some(occ);
-        } else {
-            break;
         }
     }
 
@@ -110,5 +108,16 @@ mod tests {
             monomerize(b"AAAAATTTTTAAAAATTTTTAAAAATTTTT", 10, 0),
             b"AAAAATTTTT"
         );
+    }
+
+    #[test]
+    fn dimer() {
+        let input = b"TAAAAAAAAAAAAATAAAAAAAAAAAAA";
+        let output = b"TAAAAAAAAAAAAA";
+
+        for seed_len in 6..=10 {
+            assert_eq!(monomerize(input, seed_len, 0), output);
+            println!("\n");
+        }
     }
 }
