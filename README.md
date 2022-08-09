@@ -1,7 +1,5 @@
 # circkit
 
-## Introduction
-
 Circkit is a library for manipulating circular biological sequences such as DNA and RNA.
 
 ## Features
@@ -46,3 +44,11 @@ Here's how it's going:
 - [ ] `grep`
 - [ ] `cluster` (future)
 - [ ] `prealign` (future)
+
+## Benchmarks
+
+To be done.
+
+## See Also
+
+- [vdsearch](https://github.com/Benjamin-Lee/vdsearch): A tool for searching for viroid-like sequences. Eventually, `circkit` be used for all of the data manipulation tasks.
