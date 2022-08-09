@@ -41,7 +41,7 @@ pub enum Command {
         #[clap(long)]
         min_overlap_percent: Option<f64>,
 
-        /// Whether output monomers that did not have any overlap. These may not be circular or multimeric
+        /// Whether to output monomers that did not have any overlap. These may not be circular or multimeric
         #[clap(short, long)]
         keep_all: bool,
     },
