@@ -41,9 +41,9 @@ pub enum Command {
         #[clap(long)]
         min_overlap_percent: Option<f64>,
 
-        /// Whether to only output monomers that were originally longer than unit length. Useful for identifying circular sequences
+        /// Whether output monomers that did not have any overlap. These may not be circular or multimeric
         #[clap(short, long)]
-        require_overlap: bool,
+        keep_all: bool,
     },
     /// concatenate sequences to themselves
     #[clap(visible_alias = "concat", visible_alias = "concatenate")]

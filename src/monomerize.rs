@@ -15,7 +15,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
             seed_length,
             max_mismatch,
             min_identity,
-            require_overlap,
+            keep_all,
             ..
         } => {
             // region: some basic sanity checks
@@ -25,14 +25,14 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             // make sure the minimum identity is in range
             if let Some(min_identity) = *min_identity {
-                if min_identity < 0.0 || min_identity > 1.0 {
+                if !(0.0..=1.0).contains(&min_identity) {
                     bail!("min_identity must be between 0.0 and 1.0");
                 }
             }
             // endregion
 
-            let mut reader = to_reader(&input)?;
-            let mut writer = to_writer(&output)?;
+            let mut reader = to_reader(input)?;
+            let mut writer = to_writer(output)?;
 
             while let Some(r) = reader.next() {
                 let record = r?;
@@ -57,8 +57,8 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     .to_owned()
                 };
 
-                // if requested, only keep the monomer if it is greater than unit length
-                if *require_overlap && monomer.len() == seq.len() {
+                // if requested, keep the monomer even if it was unit length originally
+                if !*keep_all && monomer.len() == seq.len() {
                     continue;
                 }
 

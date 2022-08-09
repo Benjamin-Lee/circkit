@@ -6,8 +6,8 @@ use needletail::{parser::write_fasta, Sequence};
 pub fn normalize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
         Command::Normalize { input, output } => {
-            let mut reader = to_reader(&input)?;
-            let mut writer = to_writer(&output)?;
+            let mut reader = to_reader(input)?;
+            let mut writer = to_writer(output)?;
 
             while let Some(r) = reader.next() {
                 let record = r?;
