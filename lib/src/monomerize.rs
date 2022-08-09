@@ -47,10 +47,10 @@ pub fn monomerize(seq: &[u8], seed_length: usize, overlap_max_mismatch: u64) -> 
 
     // create the matcher
     let shift_and = shift_and::ShiftAnd::new(seed);
-    let mut searcher = shift_and.find_all(&seq[..seq.len() - seed_length]);
+    let searcher = shift_and.find_all(&seq[..seq.len() - seed_length]);
 
     // loop over the searcher (noting that the final n bases are not included)
-    while let Some(occ) = searcher.next() {
+    for occ in searcher {
         // slice the potential overlap from the sequence
         let potential_overlap = &seq[last_match.unwrap_or(0)..occ + seed.len()];
 
