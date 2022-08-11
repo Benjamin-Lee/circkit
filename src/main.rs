@@ -3,6 +3,7 @@ use circkit_cli::{
     // concatenate::{concatenate, deconcatenate},
     monomerize::monomerize,
     normalize::normalize,
+    normalize2::normalize2,
 };
 use clap::Parser;
 use env_logger::Builder;
@@ -27,6 +28,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Normalize { .. } => {
             normalize(&cli.command)?;
+        }
+        Command::Normalize2 { .. } => {
+            normalize2(&cli.command)?;
         }
     }
     Ok(())

@@ -17,5 +17,7 @@ circkit = { path = "lib" }
 rayon = "1.5"
 anyhow = "1.0"
 needletail = "0.4"
+seq_io = "0.3.1"
+niffler = "2.4.0"
 
 [workspace]
