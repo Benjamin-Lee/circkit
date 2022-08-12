@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
 };
 
-fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<Reader<Box<dyn Read + Send>>> {
+pub fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<Reader<Box<dyn Read + Send>>> {
     match input {
         Some(input) => {
             let fp_bufreader = BufReader::new(File::open(input)?);
@@ -26,11 +26,29 @@ fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<Reader<Box<dyn Rea
     }
 }
 
-fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Write>> {
+pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Write>> {
     match output {
         Some(output) => {
+            // match the suffix of outout to see if it should be compressed
+            let suffix = output.extension().unwrap().to_str().unwrap();
+
+            let compression_format = match suffix {
+                "gz" => niffler::send::compression::Format::Gzip,
+                "bz2" => niffler::send::compression::Format::Bzip,
+                "xz" => niffler::send::compression::Format::Lzma,
+                _ => niffler::send::compression::Format::No,
+            };
+
             let fp_bufwriter = BufWriter::new(File::create(output)?);
-            Ok(Box::new(fp_bufwriter))
+            let niffed = niffler::send::get_writer(
+                Box::new(fp_bufwriter),
+                compression_format,
+                match compression_format {
+                    niffler::send::compression::Format::No => niffler::compression::Level::One,
+                    _ => niffler::compression::Level::Seven,
+                },
+            )?;
+            Ok(niffed)
         }
         None => {
             let stdout_bufwriter = BufWriter::new(stdout());
@@ -68,8 +86,8 @@ pub fn normalize2(cmd: &Command) -> anyhow::Result<()> {
                     // hoping on progress here: https://github.com/rust-lang/rust/issues/27336
                     None::<()>
                 },
-            )
-            .unwrap();
+            )?;
+            writer.flush()?;
         }
         _ => {
             anyhow::bail!("foo is not implemented for {:?}", cmd);
