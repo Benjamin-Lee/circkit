@@ -3,7 +3,7 @@ use seq_io::{fasta::Record, parallel::parallel_fasta};
 
 use crate::{
     commands::Command,
-    normalize2::{input_to_reader, output_to_writer},
+    utils::{input_to_reader, output_to_writer},
 };
 
 pub fn monomerize2(cmd: &Command) -> anyhow::Result<()> {

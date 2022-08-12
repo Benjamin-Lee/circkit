@@ -1,8 +1,9 @@
 use anyhow::{bail, Result};
 use needletail::{parse_fastx_file, parse_fastx_stdin, FastxReader};
+use seq_io::fasta::Reader;
 use std::{
     fs::File,
-    io::{stdout, BufWriter, Write},
+    io::{prelude::*, stdin, stdout, BufReader, BufWriter},
     path::PathBuf,
 };
 
@@ -30,5 +31,56 @@ pub fn to_writer(output: &Option<PathBuf>) -> Result<Box<dyn Write>> {
             Ok(Box::new(BufWriter::new(file)))
         }
         None => Ok(Box::new(BufWriter::new(stdout()))),
+    }
+}
+
+pub fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<Reader<Box<dyn Read + Send>>> {
+    match input {
+        Some(input) => {
+            let fp_bufreader = BufReader::new(File::open(input)?);
+            let niffed = niffler::send::get_reader(Box::new(fp_bufreader))?.0;
+            let reader = Reader::new(niffed);
+            Ok(reader)
+        }
+        None => {
+            if atty::is(atty::Stream::Stdin) {
+                bail!("No stdin detected. Did you mean to include a file argument?");
+            }
+            let stdin_bufreader = BufReader::new(stdin());
+            let niffed = niffler::send::get_reader(Box::new(stdin_bufreader))?.0;
+            let reader = Reader::new(niffed);
+            Ok(reader)
+        }
+    }
+}
+
+pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Write>> {
+    match output {
+        Some(output) => {
+            // match the suffix of outout to see if it should be compressed
+            let suffix = output.extension().unwrap().to_str().unwrap();
+
+            let compression_format = match suffix {
+                "gz" => niffler::send::compression::Format::Gzip,
+                "bz2" => niffler::send::compression::Format::Bzip,
+                "xz" => niffler::send::compression::Format::Lzma,
+                _ => niffler::send::compression::Format::No,
+            };
+
+            let fp_bufwriter = BufWriter::new(File::create(output)?);
+            let niffed = niffler::send::get_writer(
+                Box::new(fp_bufwriter),
+                compression_format,
+                match compression_format {
+                    niffler::send::compression::Format::No => niffler::compression::Level::One,
+                    _ => niffler::compression::Level::Seven,
+                },
+            )?;
+            Ok(niffed)
+        }
+        None => {
+            let stdout_bufwriter = BufWriter::new(stdout());
+            Ok(Box::new(stdout_bufwriter))
+        }
     }
 }
