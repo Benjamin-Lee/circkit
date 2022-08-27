@@ -125,4 +125,11 @@ pub enum Command {
         #[clap(short, long)]
         output: Option<PathBuf>,
     },
+    Uniq {
+        /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
+        input: Option<PathBuf>,
+        /// Output FASTA file path [default: stdout]
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+    },
 }

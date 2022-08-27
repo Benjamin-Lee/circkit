@@ -4,4 +4,5 @@ pub mod monomerize;
 pub mod monomerize2;
 pub mod normalize;
 pub mod normalize2;
+pub mod uniq;
 pub mod utils;

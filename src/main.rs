@@ -5,6 +5,7 @@ use circkit_cli::{
     monomerize2::monomerize2,
     normalize::normalize,
     normalize2::normalize2,
+    uniq::uniq,
 };
 use clap::Parser;
 use env_logger::Builder;
@@ -32,6 +33,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Normalize2 { .. } => {
             normalize2(&cli.command)?;
+        }
+        Command::Uniq { .. } => {
+            uniq(&cli.command)?;
         }
     }
     Ok(())
