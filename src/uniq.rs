@@ -11,7 +11,11 @@ use std::{
 
 pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Uniq { input, output } => {
+        Command::Uniq {
+            input,
+            output,
+            normalize,
+        } => {
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
 
@@ -23,17 +27,24 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                 64,
                 |record, seq| {
                     // runs in worker
-                    *seq =
+                    let normalized =
                         circkit::normalize(&record.full_seq(), circkit::normalize::Alphabet::Dna);
 
                     // hash the normalized sequence
                     let mut hasher = FxHasher::default();
-                    seq.hash(&mut hasher);
+                    normalized.hash(&mut hasher);
                     let hash = hasher.finish();
 
                     let mut x = seen.lock().unwrap();
                     if !x.insert(hash) {
                         *seq = vec![];
+                    } else {
+                        // if the user requested, write the normalized sequence
+                        if *normalize {
+                            *seq = normalized
+                        } else {
+                            *seq = record.seq().to_vec()
+                        }
                     }
                     drop(x);
                 },

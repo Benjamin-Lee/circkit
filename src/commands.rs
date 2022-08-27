@@ -52,7 +52,10 @@ pub enum Command {
         #[clap(short, long)]
         /// Output FASTA file path [default: stdout]
         output: Option<PathBuf>,
-        /// Whether to canonicalize the monomers. This is faster than normalizing separately since it skips reading the sequences back into memory
+        /// Whether to canonicalize the monomers.
+        /// This is faster than normalizing separately (perhaps via piping) since it skips reading the sequences back into memory.
+        /// Because this is a common use case, it is available as an option.
+        /// See also --uniq
         #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
         normalize: bool,
         /// The length of the seed to search for. Must be less than or equal to the length of the sequence but should be much smaller to be meaningful
@@ -75,7 +78,8 @@ pub enum Command {
         #[clap(long)]
         min_overlap_percent: Option<f64>,
 
-        /// Whether to output monomers that did not have any overlap. These may not be circular or multimeric
+        /// Whether to output sequences that did not have any overlap.
+        /// These sequences could possibly be circular or multimeric since they failed to monomerize.
         #[clap(short, long)]
         keep_all: bool,
     },
@@ -125,11 +129,17 @@ pub enum Command {
         #[clap(short, long)]
         output: Option<PathBuf>,
     },
+    /// Deduplicate circular sequences
     Uniq {
         /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
         input: Option<PathBuf>,
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
         output: Option<PathBuf>,
+        /// Whether to canonicalize the unique sequences.
+        /// This is faster than normalizing separately (perhaps via piping) since it skips reading the sequences back into memory.
+        /// Because this is a common use case, it is available as an option.
+        #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
+        normalize: bool,
     },
 }
