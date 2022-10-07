@@ -16,6 +16,7 @@ pub fn monomerize2(cmd: &Command) -> anyhow::Result<()> {
             max_mismatch,
             min_identity,
             keep_all,
+            threads,
             ..
         } => {
             // region: some basic sanity checks
@@ -36,17 +37,22 @@ pub fn monomerize2(cmd: &Command) -> anyhow::Result<()> {
 
             parallel_fasta(
                 reader,
-                8,
+                u32::try_from(*threads)?,
                 64,
                 |record, seq| {
                     let original_seq = record.full_seq();
                     let original_len = original_seq.len();
-                    *seq = circkit::monomerize(
-                        &original_seq,
-                        usize::try_from(*seed_length).expect("Can't convert seed length to usize"),
-                        max_mismatch.unwrap_or(0),
-                    )
-                    .to_owned();
+                    let mut builder = circkit::monomerize2::Monomerizer::builder();
+
+                    // set the seed length
+                    builder.seed_len((*seed_length).try_into().expect("Seed length is too large"));
+
+                    if let Some(max_mismatch) = *max_mismatch {
+                        builder.overlap_dist(max_mismatch);
+                    }
+
+                    let m = builder.build().unwrap();
+                    *seq = m.monomerize(&original_seq).to_owned();
 
                     // if requested, keep the monomer even if it was unit length originally
                     if !*keep_all && seq.len() == original_len {

@@ -24,7 +24,7 @@ pub enum Command {
         #[clap(short, long)]
         normalize: bool,
         /// The length of the seed to search for. Must be less than or equal to the length of the sequence but should be much smaller to be meaningful
-        #[clap(long, default_value = "10", value_parser = clap::value_parser!(u64).range(5..))]
+        #[clap(long, default_value = "10", value_parser = clap::value_parser!(u64).range(5..=64))]
         seed_length: u64,
         #[clap(long, group = "max_mismatch")]
         /// The maximum number of mismatches to allow in the overlap. Conflicts with --min-identity
@@ -59,15 +59,15 @@ pub enum Command {
         #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
         normalize: bool,
         /// The length of the seed to search for. Must be less than or equal to the length of the sequence but should be much smaller to be meaningful
-        #[clap(long, default_value = "10", value_parser = clap::value_parser!(u64).range(5..))]
+        #[clap(long, default_value = "10", value_parser = clap::value_parser!(u64).range(5..=64))]
         seed_length: u64,
 
         // Overlap similarity cutoffs
-        #[clap(long, group = "max_mismatch")]
+        #[clap(long, group = "overlap_cutoffs")]
         /// The maximum number of mismatches to allow in the overlap. Conflicts with --min-identity
         max_mismatch: Option<u64>,
         /// The maximum percentage of the overlap that can be mismatched. Conflicts with --max-mismatch
-        #[clap(long, conflicts_with = "max_mismatch")]
+        #[clap(long, conflicts_with = "overlap_cutoffs")]
         min_identity: Option<f64>,
 
         /// Minimum length of the overlap (in nt) to keep the monomer. If the overlap is less than this, the monomer is discarded
@@ -82,6 +82,10 @@ pub enum Command {
         /// These sequences could possibly be circular or multimeric since they failed to monomerize.
         #[clap(short, long)]
         keep_all: bool,
+
+        /// The number of threads to use. If not specified, the number of logical cores is used.
+        #[clap(short, long, default_value_t = num_cpus::get())]
+        threads: usize,
     },
     /// concatenate sequences to themselves
     #[clap(visible_alias = "concat", visible_alias = "concatenate")]
@@ -136,9 +140,8 @@ pub enum Command {
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
         output: Option<PathBuf>,
-        /// Whether to canonicalize the unique sequences.
-        /// This is faster than normalizing separately (perhaps via piping) since it skips reading the sequences back into memory.
-        /// Because this is a common use case, it is available as an option.
+        /// Whether output normalized circular sequences.
+        /// This is faster than normalizing separately (perhaps via piping) since the sequences are normalized anyway when deduplicating.
         #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
         normalize: bool,
     },
