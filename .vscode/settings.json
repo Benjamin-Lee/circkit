@@ -1,0 +1,14 @@
+{
+  // we have to use non-italic comments because the it makes showing alignments hard
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "comment",
+        "settings": {
+          "fontStyle": ""
+        }
+      }
+    ]
+  },
+  "editor.formatOnType": true
+}
