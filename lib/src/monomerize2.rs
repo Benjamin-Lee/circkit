@@ -6,10 +6,10 @@ use memchr::memmem;
 #[derive(Builder, Default, Clone)]
 #[builder(setter(strip_option), build_fn(validate = "Self::validate"))]
 pub struct Monomerizer {
-    /// The maximum number of mismatches allowed in an overlap.
+    /// The maximum number of mismatches allowed in an overlap. Conflicts with `overlap_min_identity`.
     #[builder(default)]
     pub overlap_dist: Option<u64>,
-    /// The minimum percent identity within an overlap that may be considered a match. Overrides `overlap_dist`.
+    /// The minimum percent identity within an overlap that may be considered a match. Conflicts with `overlap_dist`.
     #[builder(default)]
     pub overlap_min_identity: Option<f64>,
     /// The size of the seed to search for in the overlap.
@@ -60,11 +60,11 @@ impl Monomerizer {
         // we start out assuming the seed isn't even present anywhere else
         let mut last_match: Option<usize> = None;
 
+        // slice the sequence up to the last n bases for the matcher to search
         let text = &seq[..seq.len() - seed_len];
 
         // create the matcher
         let matcher = shift_and::ShiftAnd::new(seed);
-        // let matcher = memmem::find_iter(text, seed);
 
         // loop over the searcher (noting that the final n bases are not included)
         for occ in matcher.find_all(text) {
@@ -77,7 +77,7 @@ impl Monomerizer {
             // compare the potential overlap to the seed
             let dist = hamming(potential_overlap, seed_extension);
 
-            // decide whether the overlap is good enough to be a monomer
+            // compute the maximum distance allowed for the overlap
             let max_dist = match self.overlap_min_identity {
                 Some(identity) => {
                     potential_overlap.len() as u64
@@ -86,6 +86,7 @@ impl Monomerizer {
                 None => self.overlap_dist.unwrap_or(0),
             };
 
+            // decide whether the overlap is good enough to be a monomer
             if dist <= max_dist {
                 last_match = Some(occ);
             }
