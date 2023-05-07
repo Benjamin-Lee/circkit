@@ -1,7 +1,6 @@
 use bio::alignment::distance::simd::*;
 use bio::pattern_matching::shift_and;
 use log::warn;
-use memchr::memmem;
 
 #[derive(Builder, Default, Clone)]
 #[builder(setter(strip_option), build_fn(validate = "Self::validate"))]
