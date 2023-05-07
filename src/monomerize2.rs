@@ -11,13 +11,14 @@ pub fn monomerize2(cmd: &Command) -> anyhow::Result<()> {
         Command::Monomerize2 {
             input,
             output,
-            normalize,
             seed_length,
             max_mismatch,
             min_identity,
             keep_all,
             threads,
-            ..
+            batch_size,
+            min_overlap,
+            min_overlap_percent,
         } => {
             // region: some basic sanity checks
             if max_mismatch.is_some() && min_identity.is_some() {
@@ -38,39 +39,57 @@ pub fn monomerize2(cmd: &Command) -> anyhow::Result<()> {
             parallel_fasta(
                 reader,
                 u32::try_from(*threads)?,
-                64,
-                |record, seq| {
+                *batch_size,
+                |record, idx| {
                     let original_seq = record.full_seq();
-                    let original_len = original_seq.len();
                     let mut builder = circkit::monomerize2::Monomerizer::builder();
 
                     // set the seed length
                     builder.seed_len((*seed_length).try_into().expect("Seed length is too large"));
 
+                    // set the maximum mismatch count
                     if let Some(max_mismatch) = *max_mismatch {
                         builder.overlap_dist(max_mismatch);
                     }
 
+                    // set the minimum identity
+                    if let Some(min_identity) = *min_identity {
+                        builder.overlap_min_identity(min_identity);
+                    }
+
                     let m = builder.build().unwrap();
-                    *seq = m.monomerize(&original_seq).to_owned();
-
-                    // if requested, keep the monomer even if it was unit length originally
-                    if !*keep_all && seq.len() == original_len {
-                        *seq = vec![];
-                        return;
-                    }
-
-                    // optionally normalize the sequence to save on IO
-                    if *normalize {
-                        *seq = circkit::normalize(seq, circkit::normalize::Alphabet::Dna);
-                    }
+                    *idx = m.monomer_index(&original_seq);
                 },
-                |record, seq| {
-                    if !seq.is_empty() {
+                |record, idx| {
+                    // get the full sequence
+                    let full_seq = record.full_seq();
+
+                    // region: check the monomer is long enough, either absolute or relative to the original sequence
+
+                    // absolute length
+                    if let Some(min_overlap) = *min_overlap {
+                        if *idx < min_overlap {
+                            *idx = 0; // reject the monomer by resetting the index to 0
+                        }
+                    }
+
+                    // relative length
+                    if let Some(min_overlap_percent) = *min_overlap_percent {
+                        let monomer_length = full_seq.len() as f64 - *idx as f64;
+
+                        if *idx as f64 / monomer_length < min_overlap_percent {
+                            *idx = 0; // reject the monomer by resetting the index to 0
+                        }
+                    }
+                    // endregion
+
+                    // when keep_all is true, we write all sequences
+                    // otherwise, we only write sequences that have been monomerized (i.e. the monomer index is not 0)
+                    if *idx != 0 || *keep_all {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.id().unwrap().as_bytes()).unwrap();
                         writer.write_all(b"\n").unwrap();
-                        writer.write_all(seq).unwrap();
+                        writer.write_all(&full_seq[*idx..]).unwrap();
                         writer.write_all(b"\n").unwrap();
                     }
                     None::<()>

@@ -1,7 +1,6 @@
 use circkit_cli::{
     commands::{Cli, Command},
     // concatenate::{concatenate, deconcatenate},
-    monomerize::monomerize,
     monomerize2::monomerize2,
     normalize::normalize,
     normalize2::normalize2,
@@ -20,7 +19,6 @@ fn main() -> anyhow::Result<()> {
     let mut builder = Builder::new();
     builder.filter(None, LevelFilter::Info).init();
     match &cli.command {
-        Command::Monomerize { .. } => (monomerize(&cli.command)?),
         Command::Monomerize2 { .. } => (monomerize2(&cli.command)?),
         Command::Cat { .. } => {
             // concatenate(input, output).expect("concatenation failed");

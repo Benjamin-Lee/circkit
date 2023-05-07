@@ -1,6 +1,5 @@
 pub mod commands;
 // pub mod concatenate;
-pub mod monomerize;
 pub mod monomerize2;
 pub mod normalize;
 pub mod normalize2;

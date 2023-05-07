@@ -10,13 +10,13 @@ authors = ["Benjamin D. Lee <benjamin.lee@chch.ox.ac.uk>"]
 atty = "0.2.14"
 bio = "*"
 clap = { version = "3.0", features = ["derive"] }
-env_logger = "0.9.0"
+env_logger = "0.10.0"
 human-panic = "1.0.3"
 log = "0.4.17"
 circkit = { path = "lib" }
 rayon = "1.5"
 anyhow = "1.0"
-needletail = "0.4"
+needletail = "0.5.1"
 seq_io = "0.3.1"
 niffler = "2.4.0"
 rustc-hash = "1.1.0"
@@ -25,6 +25,6 @@ num_cpus = "1.0"
 [dev-dependencies]
 assert_cmd = "2.0.4"
 assert_fs = "1.0"
-predicates = "2.1"
+predicates = "3.0.3"
 
 [workspace]

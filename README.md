@@ -1,6 +1,6 @@
-# circkit
+# CircKit
 
-Circkit is a library for manipulating circular biological sequences such as DNA and RNA.
+CircKit is a library for manipulating circular biological sequences such as DNA and RNA.
 
 ## Features
 
@@ -30,6 +30,29 @@ SUBCOMMANDS:
     monomerize    Find monomers of (potentially) circular or multimeric sequences
     normalize     Normalize circular sequences [aliases: canonicalize, canon]
 ```
+
+## Subommands
+
+### `cat` and `decat`
+
+`cat` and `decat` are used to concatenate and deconcatenate sequences to themselves. These commands are useful for dealing with tools that assume that the input sequence is linear.
+
+For example, let's say you had a tool that does some sort of filtering on linear sequences. You could use `cat` to convert your circular sequences to linear sequences, run the tool, and then use `decat` to convert the output linear sequences back to circular sequences.
+
+As a note, CircKit's `cat` is functionally equivalent to `seqkit concat file.fasta file.fasta`.
+
+### `normalize`
+
+`normalize` computes a single, canonical representation of a circular sequence. This is useful for comparing sequences that are the same but have different polarities or different starting positions. For example, the following two sequences are the same if they are circular:
+
+```text
+>seq1
+TGCA
+>seq2
+GCAT
+```
+
+We define the canonical representation as the lexicographically smallest rotation of either polarity. In other words, we compute the sequence rotation that would come first in the alphabet for each polarity (known as the [lexicographically minimal string rotation](https://en.wikipedia.org/wiki/Lexicographically_minimal_string_rotation)). Then we simply compare the LMSRs for each polarity and return the one that comes first in the alphabet. So, in the example above, the normalized representation is `ATGC`.
 
 ## Roadmap
 
