@@ -67,9 +67,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
             )?;
             writer.flush()?;
         }
-        _ => {
-            anyhow::bail!("uniq is not implemented for {:?}", cmd);
-        }
+        _ => panic!("input command is not for uniq"),
     }
     Ok(())
 }
