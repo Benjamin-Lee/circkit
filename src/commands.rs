@@ -47,8 +47,8 @@ pub enum Command {
         keep_all: bool,
 
         /// The number of threads to use. If not specified, the number of logical cores is used.
-        #[clap(short, long, default_value_t = num_cpus::get())]
-        threads: usize,
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        threads: u32,
 
         #[clap(long, hidden = true, default_value_t = 64)]
         batch_size: usize,
@@ -91,6 +91,9 @@ pub enum Command {
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
         output: Option<PathBuf>,
+        /// The number of threads to use. If not specified, the number of logical cores is used.
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        threads: u32,
     },
     /// Deduplicate circular sequences
     Uniq {
@@ -103,5 +106,8 @@ pub enum Command {
         /// This is faster than normalizing separately (perhaps via piping) since the sequences are normalized anyway when deduplicating.
         #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
         normalize: bool,
+        /// The number of threads to use. If not specified, the number of logical cores is used.
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        threads: u32,
     },
 }

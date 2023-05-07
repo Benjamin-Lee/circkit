@@ -38,7 +38,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             parallel_fasta(
                 reader,
-                u32::try_from(*threads)?,
+                *threads,
                 *batch_size,
                 |record, idx| {
                     let original_seq = record.full_seq();

@@ -6,13 +6,17 @@ use seq_io::{fasta::Record, parallel::parallel_fasta};
 
 pub fn normalize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Normalize { input, output } => {
+        Command::Normalize {
+            input,
+            output,
+            threads,
+        } => {
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
 
             parallel_fasta(
                 reader,
-                8,
+                *threads,
                 64,
                 |record, seq| {
                     // runs in worker

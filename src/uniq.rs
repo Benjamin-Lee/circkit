@@ -15,6 +15,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
             input,
             output,
             normalize,
+            threads,
         } => {
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
@@ -23,7 +24,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
 
             parallel_fasta(
                 reader,
-                8,
+                *threads,
                 64,
                 |record, seq| {
                     // runs in worker
