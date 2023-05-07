@@ -14,7 +14,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Find monomers of (potentially) circular or multimeric sequences
-    Monomerize2 {
+    Monomerize {
         /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
         input: Option<PathBuf>,
         #[clap(short, long)]

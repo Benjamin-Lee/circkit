@@ -6,9 +6,9 @@ use crate::{
     utils::{input_to_reader, output_to_writer},
 };
 
-pub fn monomerize2(cmd: &Command) -> anyhow::Result<()> {
+pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Monomerize2 {
+        Command::Monomerize {
             input,
             output,
             seed_length,
