@@ -3,7 +3,6 @@ use circkit_cli::{
     // concatenate::{concatenate, deconcatenate},
     monomerize::monomerize,
     normalize::normalize,
-    normalize2::normalize2,
     uniq::uniq,
 };
 use clap::Parser;
@@ -28,9 +27,6 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Normalize { .. } => {
             normalize(&cli.command)?;
-        }
-        Command::Normalize2 { .. } => {
-            normalize2(&cli.command)?;
         }
         Command::Uniq { .. } => {
             uniq(&cli.command)?;

@@ -1,32 +1,42 @@
-use crate::commands::Command;
-use crate::utils::{to_reader, to_writer};
-use needletail::{parser::write_fasta, Sequence};
+use crate::{
+    commands::Command,
+    utils::{input_to_reader, output_to_writer},
+};
+use seq_io::{fasta::Record, parallel::parallel_fasta};
 
-/// Rotationally canonicalize sequences.
 pub fn normalize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
         Command::Normalize { input, output } => {
-            let mut reader = to_reader(input)?;
-            let mut writer = to_writer(output)?;
+            let reader = input_to_reader(input)?;
+            let mut writer = output_to_writer(output)?;
 
-            while let Some(r) = reader.next() {
-                let record = r?;
+            parallel_fasta(
+                reader,
+                8,
+                64,
+                |record, seq| {
+                    // runs in worker
+                    *seq =
+                        circkit::normalize(&record.full_seq(), circkit::normalize::Alphabet::Dna);
+                },
+                |record, seq| {
+                    // runs in main thread
+                    writer.write_all(b">").unwrap();
+                    writer.write_all(record.id().unwrap().as_bytes()).unwrap();
+                    writer.write_all(b"\n").unwrap();
+                    writer.write_all(seq).unwrap();
+                    writer.write_all(b"\n").unwrap();
 
-                write_fasta(
-                    record.id(),
-                    &circkit::normalize(
-                        &record.seq().normalize(false),
-                        circkit::normalize::Alphabet::Dna,
-                    ),
-                    &mut writer,
-                    needletail::parser::LineEnding::Unix,
-                )?;
-            }
-
-            // Clean up before exiting
+                    // Some(value) will stop the reader, and the value will be returned.
+                    // In the case of never stopping, we need to give the compiler a hint about the
+                    // type parameter, thus the special 'turbofish' notation is needed,
+                    // hoping on progress here: https://github.com/rust-lang/rust/issues/27336
+                    None::<()>
+                },
+            )?;
             writer.flush()?;
         }
         _ => panic!("input command is not for normalize"),
-    };
+    }
     Ok(())
 }
