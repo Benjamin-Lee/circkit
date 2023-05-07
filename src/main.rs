@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
     let mut builder = Builder::new();
     builder.filter(None, LevelFilter::Info).init();
     match &cli.command {
-        Command::Monomerize2 { .. } => (monomerize2(&cli.command)?),
+        Command::Monomerize2 { .. } => monomerize2(&cli.command)?,
         Command::Cat { .. } => {
             // concatenate(input, output).expect("concatenation failed");
         }

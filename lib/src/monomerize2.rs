@@ -324,7 +324,6 @@ mod test {
 
     mod validation {
         use super::*;
-        use pretty_assertions::assert_eq;
         #[test]
         #[should_panic(expected = "seed_len")]
         fn seed_not_set() {
