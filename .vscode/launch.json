@@ -1,0 +1,88 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'circkit-cli'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=circkit-cli"],
+        "filter": {
+          "name": "circkit-cli",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'circkit-cli'",
+      "cargo": {
+        "args": ["build", "--bin=circkit-cli", "--package=circkit-cli"],
+        "filter": {
+          "name": "circkit-cli",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'circkit-cli'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=circkit-cli",
+          "--package=circkit-cli"
+        ],
+        "filter": {
+          "name": "circkit-cli",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug integration test 'monomerize'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--test=monomerize",
+          "--package=circkit-cli"
+        ],
+        "filter": {
+          "name": "monomerize",
+          "kind": "test"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'circkit'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=circkit"],
+        "filter": {
+          "name": "circkit",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
