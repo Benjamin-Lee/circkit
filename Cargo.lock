@@ -361,6 +361,7 @@ dependencies = [
  "niffler",
  "num_cpus",
  "predicates",
+ "rstest",
  "rustc-hash",
  "seq_io",
 ]

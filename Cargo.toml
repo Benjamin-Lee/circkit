@@ -25,5 +25,10 @@ num_cpus = "1.0"
 assert_cmd = "2.0.4"
 assert_fs = "1.0"
 predicates = "3.0.3"
+rstest = "0.15.0"
 
 [workspace]
+
+[[bin]]
+name = "circkit"
+path = "src/main.rs"
