@@ -1,38 +1,10 @@
-use anyhow::{bail, Result};
-use needletail::{parse_fastx_file, parse_fastx_stdin, FastxReader};
+use anyhow::bail;
 use seq_io::fasta::Reader;
 use std::{
     fs::File,
     io::{prelude::*, stdin, stdout, BufReader, BufWriter},
     path::PathBuf,
 };
-
-pub fn to_reader(input: &Option<PathBuf>) -> Result<Box<dyn FastxReader>> {
-    match input {
-        Some(filename) => Ok(parse_fastx_file(&filename).expect("valid path/file")),
-        None => {
-            if atty::is(atty::Stream::Stdin) {
-                bail!("No stdin detected. Did you mean to include a file argument?");
-            }
-            Ok(parse_fastx_stdin().expect("valid stdin"))
-        }
-    }
-}
-pub fn to_writer(output: &Option<PathBuf>) -> Result<Box<dyn Write>> {
-    match output {
-        Some(filename) => {
-            let file = File::create(filename)?;
-            if !file.metadata()?.is_file() {
-                bail!(
-                    "Input {} is a directory. Did you mean to include a file in the directory?",
-                    filename.display()
-                );
-            }
-            Ok(Box::new(BufWriter::new(file)))
-        }
-        None => Ok(Box::new(BufWriter::new(stdout()))),
-    }
-}
 
 pub fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<Reader<Box<dyn Read + Send>>> {
     match input {
@@ -68,7 +40,17 @@ pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Writ
                 _ => niffler::send::compression::Format::No,
             };
 
-            let fp_bufwriter = BufWriter::new(File::create(output)?);
+            let outfile = match File::create(output) {
+                Ok(file) => file,
+                Err(_) => {
+                    bail!(
+                        "Could not create output file {}. Are you sure it's not actually a directory?",
+                        output.display()
+                    );
+                }
+            };
+
+            let fp_bufwriter = BufWriter::new(outfile);
             let niffed = niffler::send::get_writer(
                 Box::new(fp_bufwriter),
                 compression_format,
