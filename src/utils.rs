@@ -64,6 +64,7 @@ pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Writ
                 "gz" => niffler::send::compression::Format::Gzip,
                 "bz2" => niffler::send::compression::Format::Bzip,
                 "xz" => niffler::send::compression::Format::Lzma,
+                "zst" => niffler::send::compression::Format::Zstd,
                 _ => niffler::send::compression::Format::No,
             };
 
@@ -72,8 +73,11 @@ pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Writ
                 Box::new(fp_bufwriter),
                 compression_format,
                 match compression_format {
+                    niffler::send::compression::Format::Gzip => niffler::compression::Level::Six,
+                    niffler::send::compression::Format::Bzip => niffler::compression::Level::Nine,
+                    niffler::send::compression::Format::Lzma => niffler::compression::Level::Six,
+                    niffler::send::compression::Format::Zstd => niffler::compression::Level::One,
                     niffler::send::compression::Format::No => niffler::compression::Level::One,
-                    _ => niffler::compression::Level::Seven,
                 },
             )?;
             Ok(niffed)
