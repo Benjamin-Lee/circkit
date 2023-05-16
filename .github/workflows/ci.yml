@@ -23,10 +23,16 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Run cargo check
+      - name: Run cargo check for CLI
         uses: actions-rs/cargo@v1
         with:
           command: check
+
+      - name: Run cargo check for library
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --manifest-path=lib/Cargo.toml
 
   test:
     name: Test Suite
