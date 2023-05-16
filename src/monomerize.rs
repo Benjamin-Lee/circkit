@@ -42,7 +42,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                 *batch_size,
                 |record, idx| {
                     let original_seq = record.full_seq();
-                    let mut builder = circkit::monomerize2::Monomerizer::builder();
+                    let mut builder = circkit::monomerize::Monomerizer::builder();
 
                     // set the seed length
                     builder.seed_len((*seed_length).try_into().expect("Seed length is too large"));
