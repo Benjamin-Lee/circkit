@@ -80,18 +80,9 @@ mod lmsr_test {
     }
 }
 
-pub enum Alphabet {
-    Dna,
-    Rna,
-}
-use self::Alphabet::*;
-
-pub fn normalize(s: &[u8], alphabet: Alphabet) -> Vec<u8> {
+pub fn canonicalize(s: &[u8]) -> Vec<u8> {
     let lmsr_s = lmsr(s);
-    let lmsr_revcomp_s = match alphabet {
-        Dna => lmsr(&alphabets::dna::revcomp(&lmsr_s)),
-        Rna => lmsr(&alphabets::rna::revcomp(&lmsr_s)),
-    };
+    let lmsr_revcomp_s = lmsr(&alphabets::dna::revcomp(&lmsr_s));
 
     if lmsr_s < lmsr_revcomp_s {
         lmsr_s
@@ -101,18 +92,18 @@ pub fn normalize(s: &[u8], alphabet: Alphabet) -> Vec<u8> {
 }
 
 #[cfg(test)]
-mod normalize_test {
+mod canonicalize_test {
     use super::*;
     #[test]
     fn aaa() {
-        assert_eq!(normalize(b"AAA", Dna), b"AAA");
+        assert_eq!(canonicalize(b"AAA"), b"AAA");
     }
     #[test]
     fn att() {
-        assert_eq!(normalize(b"ATT", Dna), b"AAT");
+        assert_eq!(canonicalize(b"ATT"), b"AAT");
     }
     #[test]
     fn auu() {
-        assert_eq!(normalize(b"AUU", Rna), b"AAU");
+        assert_eq!(canonicalize(b"AUU"), b"AAU");
     }
 }

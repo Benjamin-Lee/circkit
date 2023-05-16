@@ -85,7 +85,7 @@ pub enum Command {
         visible_alias = "canonicalize",
         visible_alias = "canon"
     )]
-    Normalize {
+    Canonicalize {
         /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
         input: Option<PathBuf>,
         /// Output FASTA file path [default: stdout]
@@ -102,10 +102,10 @@ pub enum Command {
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
         output: Option<PathBuf>,
-        /// Whether output normalized circular sequences.
-        /// This is faster than normalizing separately (perhaps via piping) since the sequences are normalized anyway when deduplicating.
+        /// Whether output canonicalized circular sequences.
+        /// This is faster than canonicalizing separately (perhaps via piping) since the sequences are canonicalized anyway when deduplicating.
         #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
-        normalize: bool,
+        canonicalize: bool,
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,

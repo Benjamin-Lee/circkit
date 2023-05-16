@@ -41,7 +41,6 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                 *threads,
                 *batch_size,
                 |record, idx| {
-                    let original_seq = record.full_seq();
                     let mut builder = circkit::monomerize::Monomerizer::builder();
 
                     // set the seed length
@@ -58,7 +57,14 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     }
 
                     let m = builder.build().unwrap();
-                    *idx = m.monomer_index(&original_seq);
+
+                    // normalize the sequence
+                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
+                        Some(x) => x,
+                        None => record.seq().to_vec(),
+                    };
+
+                    *idx = m.monomer_index(&normalized);
                 },
                 |record, idx| {
                     // get the full sequence

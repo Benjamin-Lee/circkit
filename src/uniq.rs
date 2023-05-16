@@ -14,7 +14,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
         Command::Uniq {
             input,
             output,
-            normalize,
+            canonicalize,
             threads,
         } => {
             let reader = input_to_reader(input)?;
@@ -28,12 +28,17 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                 64,
                 |record, seq| {
                     // runs in worker
-                    let normalized =
-                        circkit::normalize(&record.full_seq(), circkit::normalize::Alphabet::Dna);
+
+                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
+                        Some(x) => x,
+                        None => record.seq().to_vec(),
+                    };
+
+                    let canonicalized = circkit::canonicalize(&normalized);
 
                     // hash the normalized sequence
                     let mut hasher = FxHasher::default();
-                    normalized.hash(&mut hasher);
+                    canonicalized.hash(&mut hasher);
                     let hash = hasher.finish();
 
                     let mut x = seen.lock().unwrap();
@@ -41,8 +46,8 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                         *seq = vec![];
                     } else {
                         // if the user requested, write the normalized sequence
-                        if *normalize {
-                            *seq = normalized
+                        if *canonicalize {
+                            *seq = canonicalized
                         } else {
                             *seq = record.seq().to_vec()
                         }

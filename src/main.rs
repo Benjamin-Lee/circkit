@@ -1,8 +1,8 @@
 use circkit_cli::{
+    canonicalize::canonicalize,
     commands::{Cli, Command},
     // concatenate::{concatenate, deconcatenate},
     monomerize::monomerize,
-    normalize::normalize,
     uniq::uniq,
 };
 use clap::Parser;
@@ -25,8 +25,8 @@ fn main() -> anyhow::Result<()> {
         Command::Decat { .. } => {
             // deconcatenate(input, output).expect("deconcatenation failed");
         }
-        Command::Normalize { .. } => {
-            normalize(&cli.command)?;
+        Command::Canonicalize { .. } => {
+            canonicalize(&cli.command)?;
         }
         Command::Uniq { .. } => {
             uniq(&cli.command)?;

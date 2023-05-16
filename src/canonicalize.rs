@@ -4,9 +4,9 @@ use crate::{
 };
 use seq_io::{fasta::Record, parallel::parallel_fasta};
 
-pub fn normalize(cmd: &Command) -> anyhow::Result<()> {
+pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Normalize {
+        Command::Canonicalize {
             input,
             output,
             threads,
@@ -20,8 +20,13 @@ pub fn normalize(cmd: &Command) -> anyhow::Result<()> {
                 64,
                 |record, seq| {
                     // runs in worker
-                    *seq =
-                        circkit::normalize(&record.full_seq(), circkit::normalize::Alphabet::Dna);
+
+                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
+                        Some(x) => x,
+                        None => record.seq().to_vec(),
+                    };
+
+                    *seq = circkit::canonicalize(&normalized);
                 },
                 |record, seq| {
                     // runs in main thread
@@ -40,7 +45,7 @@ pub fn normalize(cmd: &Command) -> anyhow::Result<()> {
             )?;
             writer.flush()?;
         }
-        _ => panic!("input command is not for normalize"),
+        _ => panic!("input command is not for canonicalize"),
     }
     Ok(())
 }
