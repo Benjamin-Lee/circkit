@@ -31,7 +31,7 @@ SUBCOMMANDS:
     normalize     Normalize circular sequences [aliases: canonicalize, canon]
 ```
 
-## Subommands
+## Subcommands
 
 ### `cat` and `decat`
 
