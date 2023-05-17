@@ -15,7 +15,7 @@ pub struct Cli {
 pub enum Command {
     /// Find monomers of (potentially) circular or multimeric sequences
     Monomerize {
-        /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
         #[clap(short, long)]
         /// Output FASTA file path [default: stdout]
@@ -56,7 +56,7 @@ pub enum Command {
     /// concatenate sequences to themselves
     #[clap(visible_alias = "concat", visible_alias = "concatenate")]
     Cat {
-        /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
@@ -72,7 +72,7 @@ pub enum Command {
         visible_alias = "unconcatenate"
     )]
     Decat {
-        /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
@@ -86,7 +86,7 @@ pub enum Command {
         visible_alias = "canon"
     )]
     Canonicalize {
-        /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
@@ -97,7 +97,7 @@ pub enum Command {
     },
     /// Deduplicate circular sequences
     Uniq {
-        /// Input FASTA file. May be gzip, bzip, or xz compressed [default: stdin]
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]

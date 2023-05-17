@@ -6,7 +6,7 @@ CircKit is a library for manipulating circular biological sequences such as DNA 
 
 - Easy to install
 - Written in Rust for performance and safety
-- Inputs and outputs can be gzip, bzip2, or xz compressed
+- Inputs and outputs can be gzip, bzip2, xz, or zstd compressed
 
 ## Usage
 
