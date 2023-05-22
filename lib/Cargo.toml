@@ -14,3 +14,4 @@ memchr = "2.5.0"
 [dev-dependencies]
 pretty_assertions = "1"
 rstest = "0.15.0"
+proptest = "1.0.0"
