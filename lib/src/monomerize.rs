@@ -1,4 +1,5 @@
 use bio::alignment::distance::simd::*;
+use bio::alphabets::dna;
 use bio::pattern_matching::shift_and;
 use log::warn;
 
@@ -97,9 +98,27 @@ impl Monomerizer {
         }
     }
 
+    pub fn monomer_index_sensitive(self, seq: &[u8]) -> usize {
+        // First, we monomerize as normal
+        let monomer_index = self.clone().monomer_index(seq);
+        let monomer = &seq[monomer_index..];
+        let rc = dna::revcomp(monomer);
+        let rc_monomer_index = self.clone().monomer_index(&rc);
+
+        match rc_monomer_index {
+            0 => monomer_index,
+            _ => monomer_index + (rc.len() - rc_monomer_index),
+        }
+    }
+
     /// A helper function to compute to get a slice of the monomer from a sequence.
     pub fn monomerize(self, seq: &[u8]) -> &[u8] {
         &seq[self.monomer_index(seq)..]
+    }
+
+    pub fn monomerize_sensitive(self, seq: &[u8]) -> &[u8] {
+        let start = self.monomer_index_sensitive(seq);
+        &seq[start..]
     }
 }
 
@@ -423,6 +442,69 @@ mod test {
                 .unwrap();
 
             m.monomerize(input);
+        }
+    }
+
+    mod sensitive {
+        use crate::canonicalize;
+
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn basic_sensitive() {
+            let input = "TCCTCCATCACCTAGTTTATGTAGAAACGCTGCTAAATCAATTTCCTCCATCACCTAGTTTATGTAGAAAAGCTGCTAAATCAATTTCCTCCATCACCTAGTTTATGTAGAAACGCTGCTAAATCAATTTCCTCCATCACCTAGTTTATGTAGAAAAGCTGCTA";
+
+            // monomerize the input
+            let m = Monomerizer::builder()
+                .overlap_min_identity(0.95)
+                .seed_len(10)
+                .build()
+                .unwrap();
+            let monomer = m.monomerize_sensitive(input.as_bytes());
+
+            let known_monomer = b"TCCTCCATCACCTAGTTTATGTAGAAAAGCTGCTAAATCAATT";
+
+            assert_eq!(canonicalize(monomer), canonicalize(known_monomer));
+        }
+    }
+
+    mod fuzzing {
+
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+                #[test]
+                fn concatenated_always_monomerizes(input in "[ACGT]{12,100}") {
+                    let concatenated = format!("{}{}{}", input, input, input);
+                    let m = Monomerizer::builder()
+                        .overlap_min_identity(0.95)
+                        .seed_len(10)
+                        .build()
+                        .unwrap();
+                    prop_assert_eq!(m.clone().monomerize(concatenated.as_bytes()), input.as_bytes());
+                    prop_assert_eq!(m.clone().monomerize_sensitive(concatenated.as_bytes()), input.as_bytes());
+                }
+                #[test]
+                fn small_mutations_still_monomerize(input in "[ACGT]{100,200}", mutation_index in 0..100usize) {
+                    let mut concat = format!("{}{}", input, input).into_bytes();
+
+                    concat[mutation_index] = match concat[mutation_index] {
+                        b'A' => b'C',
+                        b'C' => b'G',
+                        b'G' => b'T',
+                        b'T' => b'A',
+                        _ => unreachable!(),
+                    };
+
+                    let m = Monomerizer::builder()
+                        .overlap_min_identity(0.95)
+                        .seed_len(10)
+                        .build()
+                        .unwrap();
+                    prop_assert_eq!(m.monomerize_sensitive(&concat), input.as_bytes());
+                }
         }
     }
 }
