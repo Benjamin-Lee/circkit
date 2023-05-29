@@ -58,7 +58,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                     // runs in main thread
                     if !seq.is_empty() {
                         writer.write_all(b">").unwrap();
-                        writer.write_all(record.id().unwrap().as_bytes()).unwrap();
+                        writer.write_all(record.head()).unwrap();
                         writer.write_all(b"\n").unwrap();
                         writer.write_all(seq).unwrap();
                         writer.write_all(b"\n").unwrap();

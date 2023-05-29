@@ -31,7 +31,7 @@ pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
                 |record, seq| {
                     // runs in main thread
                     writer.write_all(b">").unwrap();
-                    writer.write_all(record.id().unwrap().as_bytes()).unwrap();
+                    writer.write_all(record.head()).unwrap();
                     writer.write_all(b"\n").unwrap();
                     writer.write_all(seq).unwrap();
                     writer.write_all(b"\n").unwrap();

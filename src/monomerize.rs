@@ -111,7 +111,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     if idx.is_some() || *keep_all {
                         let end_idx = idx.unwrap_or(full_seq.len());
                         writer.write_all(b">").unwrap();
-                        writer.write_all(record.id().unwrap().as_bytes()).unwrap();
+                        writer.write_all(record.head()).unwrap();
                         writer.write_all(b"\n").unwrap();
                         writer.write_all(&full_seq[..end_idx]).unwrap();
                         writer.write_all(b"\n").unwrap();
