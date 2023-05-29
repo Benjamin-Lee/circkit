@@ -73,6 +73,7 @@ fn compressed_output(
 fn compressed_input(
     #[values("canonicalize", "uniq", "monomerize")] command: &str,
     #[values("gz", "bz2", "xz", "zst")] extension: &str,
+    #[values("1", "2", "4")] threads: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("circkit")?;
 
@@ -83,6 +84,8 @@ fn compressed_input(
     let output = assert_fs::NamedTempFile::new("out.fasta")?;
 
     cmd.arg(command)
+        .arg("--threads")
+        .arg(threads.to_string())
         .arg(file.as_path())
         .arg("-o")
         .arg(output.path());

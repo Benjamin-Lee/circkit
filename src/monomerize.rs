@@ -64,38 +64,56 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                         None => record.seq().to_vec(),
                     };
 
-                    *idx = m.monomer_index(&normalized);
+                    // make sure the sequence is at least as long as the seed length
+                    if normalized.len() < m.seed_len {
+                        *idx = None;
+                        return;
+                    }
+
+                    *idx = m.last_monomer_end_index(&normalized);
                 },
                 |record, idx| {
                     // get the full sequence
                     let full_seq = record.full_seq();
 
                     // region: check the monomer is long enough, either absolute or relative to the original sequence
-
                     // absolute length
                     if let Some(min_overlap) = *min_overlap {
-                        if *idx < min_overlap {
-                            *idx = 0; // reject the monomer by resetting the index to 0
+                        if let Some(last_monomer_end_index) = *idx {
+                            if last_monomer_end_index < min_overlap {
+                                *idx = None; // reject the monomer
+                            }
                         }
                     }
 
                     // relative length
                     if let Some(min_overlap_percent) = *min_overlap_percent {
-                        let monomer_length = full_seq.len() as f64 - *idx as f64;
-
-                        if *idx as f64 / monomer_length < min_overlap_percent {
-                            *idx = 0; // reject the monomer by resetting the index to 0
+                        if let Some(last_monomer_end_index) = *idx {
+                            let monomer_length = last_monomer_end_index;
+                            // dbg!(record.id().unwrap());
+                            // dbg!(
+                            //     (full_seq.len() - monomer_length) as f64 / (monomer_length as f64)
+                            // );
+                            // dbg!(min_overlap_percent);
+                            // full_seq.len() - monomer_length is the length of the overlapping region
+                            // a complete monomer would have an overlap ratio of 1.0
+                            if (full_seq.len() - monomer_length) as f64 / (monomer_length as f64)
+                                < min_overlap_percent
+                            {
+                                *idx = None; // reject the monomer
+                            }
                         }
                     }
                     // endregion
 
                     // when keep_all is true, we write all sequences
-                    // otherwise, we only write sequences that have been monomerized (i.e. the monomer index is not 0)
-                    if *idx != 0 || *keep_all {
+                    // otherwise, we only write sequences that have been monomerized (i.e. the monomer index is Some)
+                    if idx.is_some() || *keep_all {
+                        let end_idx = idx.unwrap_or(full_seq.len());
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.id().unwrap().as_bytes()).unwrap();
                         writer.write_all(b"\n").unwrap();
-                        writer.write_all(&full_seq[*idx..]).unwrap();
+                        writer.write_all(&full_seq[..end_idx]).unwrap();
                         writer.write_all(b"\n").unwrap();
                     }
                     None::<()>

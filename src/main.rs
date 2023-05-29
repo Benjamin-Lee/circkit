@@ -6,17 +6,17 @@ use circkit_cli::{
     uniq::uniq,
 };
 use clap::Parser;
-use env_logger::Builder;
 use human_panic::setup_panic;
-use log::LevelFilter;
 
 fn main() -> anyhow::Result<()> {
     setup_panic!();
 
     let cli = Cli::parse();
 
-    let mut builder = Builder::new();
-    builder.filter(None, LevelFilter::Info).init();
+    env_logger::Builder::new()
+        .filter_level(cli.verbose.log_level_filter())
+        .init();
+
     match &cli.command {
         Command::Monomerize { .. } => monomerize(&cli.command)?,
         Command::Cat { .. } => {

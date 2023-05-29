@@ -7,8 +7,8 @@ pub struct Cli {
     #[clap(subcommand)]
     pub command: Command,
     // Level of verbosity.
-    // #[clap(short, long, global = true)]
-    // verbose: bool,
+    #[clap(flatten)]
+    pub verbose: clap_verbosity_flag::Verbosity,
 }
 
 #[derive(Subcommand, Debug)]
@@ -42,7 +42,7 @@ pub enum Command {
 
         /// Whether to output sequences that did not have any overlap.
         /// These sequences could possibly be circular or multimeric since they failed to monomerize.
-        /// Useful for cleaning up  datasets in which the sequences are not all monomers (e.g. viroids in GenBank).
+        /// Useful for cleaning up datasets in which the sequences are not all monomers (e.g. viroids in GenBank).
         #[clap(short, long)]
         keep_all: bool,
 
