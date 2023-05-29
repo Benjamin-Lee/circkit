@@ -80,11 +80,7 @@ pub enum Command {
     },
 
     /// Normalize circular sequences.
-    #[clap(
-        alias = "rotcanon",
-        visible_alias = "canonicalize",
-        visible_alias = "canon"
-    )]
+    #[clap(alias = "rotcanon", visible_alias = "canon")]
     Canonicalize {
         /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
