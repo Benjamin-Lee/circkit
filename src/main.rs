@@ -1,7 +1,7 @@
 use circkit_cli::{
     canonicalize::canonicalize,
     commands::{Cli, Command},
-    // concatenate::{concatenate, deconcatenate},
+    concatenate::{concatenate, deconcatenate},
     monomerize::monomerize,
     uniq::uniq,
 };
@@ -20,10 +20,10 @@ fn main() -> anyhow::Result<()> {
     match &cli.command {
         Command::Monomerize { .. } => monomerize(&cli.command)?,
         Command::Cat { .. } => {
-            // concatenate(input, output).expect("concatenation failed");
+            concatenate(&cli.command)?;
         }
         Command::Decat { .. } => {
-            // deconcatenate(input, output).expect("deconcatenation failed");
+            deconcatenate(&cli.command)?;
         }
         Command::Canonicalize { .. } => {
             canonicalize(&cli.command)?;
