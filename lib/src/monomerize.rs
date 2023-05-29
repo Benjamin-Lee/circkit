@@ -421,7 +421,7 @@ mod test {
         #[test]
         fn dimer_with_overlap_percentage() {
             let input = b"ATGCCCATGCGCCAGCGCAGATGCGAATGCGCCAGCGCAG";
-            let output = b"ATGCGAATGCGCCAGCGCAG";
+            let output = b"ATGCCCATGCGCCAGCGCAG";
 
             // ATGCCCATGCGCCAGCGCAG Overlap (20 nt)
             // ||||..||||||||||||||
