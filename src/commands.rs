@@ -20,6 +20,11 @@ pub enum Command {
         #[clap(short, long)]
         /// Output FASTA file path [default: stdout]
         output: Option<PathBuf>,
+
+        #[clap(long)]
+        /// Whether to check the sequence in reverse when the forward pass monomerization is complete. This mode can handle mutations in the seed. Using this flag will roughly double the runtime, since each sequence must now be processed twice.
+        sensitive: bool,
+
         /// The length of the seed to search for. Must be less than or equal to the length of the sequence but should be much smaller to be meaningful
         #[clap(long, default_value = "10", value_parser = clap::value_parser!(u64).range(5..=64))]
         seed_length: u64,

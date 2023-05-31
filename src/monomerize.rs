@@ -1,4 +1,5 @@
 use anyhow::bail;
+use log::{debug, info};
 use seq_io::{fasta::Record, parallel::parallel_fasta};
 
 use crate::{
@@ -11,6 +12,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
         Command::Monomerize {
             input,
             output,
+            sensitive,
             seed_length,
             max_mismatch,
             min_identity,
@@ -70,7 +72,10 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                         return;
                     }
 
-                    *idx = m.last_monomer_end_index(&normalized);
+                    *idx = match sensitive {
+                        true => m.last_monomer_end_index_sensitive(&normalized),
+                        false => m.last_monomer_end_index(&normalized),
+                    }
                 },
                 |record, idx| {
                     // get the full sequence
