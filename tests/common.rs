@@ -143,5 +143,9 @@ mod tests {
             "tests/examples/simple/in.fasta",
             "tests/examples/simple/out.fasta"
         ));
+        assert!(sequences_are_subset(
+            "tests/examples/simple/in.fasta",
+            "tests/examples/simple/out.fasta"
+        ));
     }
 }
