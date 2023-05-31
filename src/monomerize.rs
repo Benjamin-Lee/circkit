@@ -1,5 +1,4 @@
 use anyhow::bail;
-use log::{debug, info};
 use seq_io::{fasta::Record, parallel::parallel_fasta};
 
 use crate::{
