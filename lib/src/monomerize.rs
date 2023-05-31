@@ -374,6 +374,7 @@ mod test {
         #[case("TCCTCCATCACCTAGTTTATGTAGAAACGCTGCTAAATCAATTTCCTCCATCACCTAGTTTATGTAGAAAAGCTGCTAAATCAATTTCCTCCATCACCTAGTTTATGTAGAAACGCTGCTAAATCAATTTCCTCCATCACCTAGTTTATGTAGAAAAGCTGCTA", "TCCTCCATCACCTAGTTTATGTAGAAACGCTGCTAAATCAATT")]
         #[case("GCAGTTATAGAGAGAGTGGGTCAGTTCATTATTACACTGCAGTAATAGAGAGAGTGGGTCAGTTCATTATTACACTGCAGTGATAGAGAGAGTGGGTCAGTTCATTATTACACTGCAGTTATAGAGAGAGTGGGTCAGTTCATTATTACACTGCAGTAATAGAGAGAGTGGGTCAGTTCATTATTACACTGCAGTGATAG", "GCAGTTATAGAGAGAGTGGGTCAGTTCATTATTACACT")]
         #[case("CTGGCCCAGGGGCTTCTAGTCAAACAGGCCTCTCTTCCCCACTCCTTACCTCTTCTGGTCTCTGGCCCAGGGGCTTCTAGTCAAACAGGCCTCTCTTCCCCACTCCTTACCTCTTCTGGTCTCTGGCCCCTGGCCCAGGGGCTTCTAGTCAAACAGGCCTCTCTTCCCCACTCCTTACCTCTTCTGGTCTCTGGCCCAGGGGCTTCT", "CTGGCCCAGGGGCTTCTAGTCAAACAGGCCTCTCTTCCCCACTCCTTACCTCTTCTGGTCT")]
+        /// These sequences didn't monomerize correctly before switching to keeping the first monomer
         fn single_pass_regressions(#[case] input: &str, #[case] known_monomer: &str) {
             // monomerize the input
             let m = Monomerizer::builder()
@@ -382,6 +383,9 @@ mod test {
                 .build()
                 .unwrap();
             let monomer = m.monomerize(input.as_bytes());
+
+            // make sure the monomer is correct
+            assert_eq!(monomer, known_monomer.as_bytes());
         }
     }
 
@@ -494,6 +498,19 @@ mod test {
 
         use super::*;
         use pretty_assertions::{assert_eq, assert_ne};
+
+        #[test]
+        fn sensitive_monomerization() {
+            let input = b"ATGCCCATGCGCCAGCGCAAATGCCCATGCGCCAGCGCAG";
+            let output = b"ATGCCCATGCGCCAGCGCAA";
+
+            let m = Monomerizer::builder()
+                .overlap_min_identity(0.95)
+                .seed_len(4)
+                .build()
+                .unwrap();
+            assert_eq!(m.monomerize_sensitive(input), output);
+        }
     }
 
     mod fuzzing {
