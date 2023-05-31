@@ -3,6 +3,7 @@ use circkit_cli::{
     commands::{Cli, Command},
     concatenate::{concatenate, deconcatenate},
     monomerize::monomerize,
+    rotate::rotate,
     uniq::uniq,
 };
 use clap::Parser;
@@ -31,6 +32,7 @@ fn main() -> anyhow::Result<()> {
         Command::Uniq { .. } => {
             uniq(&cli.command)?;
         }
+        Command::Rotate { .. } => rotate(&cli.command)?,
     }
     Ok(())
 }

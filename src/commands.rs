@@ -111,4 +111,26 @@ pub enum Command {
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,
     },
+
+    /// Rotate circular sequences to the left or right
+    Rotate {
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
+        input: Option<PathBuf>,
+        /// Output FASTA file path [default: stdout]
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+
+        /// The number of bases to rotate the sequence. Positive numbers rotate to the right, negative numbers rotate to the left.
+        /// Rotation by amounts greater than the sequence length are equivalent to rotation by the remainder of the division of the rotation amount by the sequence length.
+        /// For example, rotating a sequence of length 100 by 101 bases is equivalent to rotating by 1 base.
+        /// This flag is mutually exclusive with --percent.
+        #[clap(short, long, allow_hyphen_values = true, group = "bases_group")]
+        bases: Option<i64>,
+
+        /// The percentage of the sequence to rotate.
+        /// This must be expressed as a decimal, e.g. 0.5 for 50%.
+        /// This flag is mutually exclusive with --bases.
+        #[clap(short, long, conflicts_with = "bases_group")]
+        percent: Option<f64>,
+    },
 }
