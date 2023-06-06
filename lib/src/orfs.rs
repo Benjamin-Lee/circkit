@@ -27,18 +27,19 @@ impl Orf {
 }
 
 pub fn find_orfs(seq: &str) -> Vec<Orf> {
-    // Step 1: Find all stop and start codons
+    // Step 1: Find all stop and start codons by frame
     let start_codons = ["ATG"];
     let stop_codons = ["TAA", "TAG", "TGA"];
-    let mut start_codon_indices = Vec::new();
-    let mut stop_codon_indices = Vec::new();
+
+    let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+    let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
 
     for i in 0..seq.len() - 2 {
         let codon = &seq[i..i + 3];
         if start_codons.contains(&codon) {
-            start_codon_indices.push(i);
+            start_codon_indices_by_frame[i % 3].push(i);
         } else if stop_codons.contains(&codon) {
-            stop_codon_indices.push(i);
+            stop_codon_indices_by_frame[i % 3].push(i);
         }
     }
 
@@ -46,34 +47,23 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
     let penultimate_codon = format!("{}{}", &seq[seq.len() - 2..], &seq[..1]);
     debug_assert!(penultimate_codon.len() == 3);
     if start_codons.contains(&penultimate_codon.as_str()) {
-        start_codon_indices.push(seq.len() - 2);
+        start_codon_indices_by_frame[(seq.len() - 2) % 3].push(seq.len() - 2);
     } else if stop_codons.contains(&penultimate_codon.as_str()) {
-        stop_codon_indices.push(seq.len() - 2);
+        stop_codon_indices_by_frame[(seq.len() - 2) % 3].push(seq.len() - 2);
     }
 
     let ultimate_codon = format!("{}{}", &seq[seq.len() - 1..], &seq[..2]);
     debug_assert!(ultimate_codon.len() == 3);
     if start_codons.contains(&ultimate_codon.as_str()) {
-        start_codon_indices.push(seq.len() - 1);
+        start_codon_indices_by_frame[(seq.len() - 1) % 3].push(seq.len() - 1);
     } else if stop_codons.contains(&ultimate_codon.as_str()) {
-        stop_codon_indices.push(seq.len() - 1);
-    }
-
-    // Step 2: Break the start and stop codons by frame
-    let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
-    let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
-
-    for &i in &start_codon_indices {
-        start_codon_indices_by_frame[i % 3].push(i);
-    }
-    for &i in &stop_codon_indices {
-        stop_codon_indices_by_frame[i % 3].push(i);
+        stop_codon_indices_by_frame[(seq.len() - 1) % 3].push(seq.len() - 1);
     }
 
     // Step 3: Find the longest ORF for each start codon
     let mut orfs = Vec::new();
 
-    for &start_codon_index in &start_codon_indices {
+    for &start_codon_index in start_codon_indices_by_frame.iter().flatten() {
         let current_frame = start_codon_index % 3;
         // let mut orf_seq = String::new();
         let mut orf_length = 0; // in nucleotides. We do this instead of storing the sequence to avoid allocating a new string for each ORF
