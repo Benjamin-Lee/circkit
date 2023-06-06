@@ -133,4 +133,16 @@ pub enum Command {
         #[clap(short, long, conflicts_with = "bases_group")]
         percent: Option<f64>,
     },
+
+    /// Find ORFs in circular sequences
+    Orfs {
+        /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
+        input: Option<PathBuf>,
+        /// Output FASTA file path [default: stdout]
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+        /// The number of threads to use. If not specified, the number of logical cores is used.
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        threads: u32,
+    },
 }

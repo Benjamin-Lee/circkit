@@ -3,12 +3,12 @@ use std::{collections::HashSet, vec};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Orf {
     /// The index of the start codon's first nucleotide.
-    start: usize,
+    pub start: usize,
     /// The index of the stop codon's first nucleotide. Might be `None` if there is no stop codon.
-    stop: Option<usize>,
-    frame_shift: usize,
+    pub stop: Option<usize>,
+    pub frame_shift: usize,
     /// The length of the ORF in nucleotides, including the start and stop codons.
-    length: usize,
+    pub length: usize,
 }
 
 // this function converts an Orf into a string with the ORF sequence

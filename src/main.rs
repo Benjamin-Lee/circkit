@@ -3,6 +3,7 @@ use circkit_cli::{
     commands::{Cli, Command},
     concatenate::{concatenate, deconcatenate},
     monomerize::monomerize,
+    orfs::orfs,
     rotate::rotate,
     uniq::uniq,
 };
@@ -33,6 +34,7 @@ fn main() -> anyhow::Result<()> {
             uniq(&cli.command)?;
         }
         Command::Rotate { .. } => rotate(&cli.command)?,
+        Command::Orfs { .. } => orfs(&cli.command)?,
     }
     Ok(())
 }
