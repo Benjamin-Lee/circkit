@@ -141,6 +141,9 @@ pub enum Command {
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
         output: Option<PathBuf>,
+        /// The minimum length of the ORF to keep (in nt)
+        #[clap(short, long, default_value = "75")]
+        min_length: usize,
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,

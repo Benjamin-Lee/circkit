@@ -2,13 +2,17 @@ use crate::{
     commands::Command,
     utils::{input_to_reader, output_to_writer},
 };
-use seq_io::{fasta::Record, parallel::parallel_fasta};
+use seq_io::{
+    fasta::{Record, RefRecord},
+    parallel::parallel_fasta,
+};
 
 pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
         Command::Orfs {
             input,
             output,
+            min_length,
             threads,
         } => {
             let reader = input_to_reader(input)?;
@@ -27,6 +31,10 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
 
                     let mut all_orfs =
                         circkit::orfs::find_orfs(std::str::from_utf8(&normalized).unwrap());
+
+                    // length filtering
+                    all_orfs.retain(|orf| orf.length >= *min_length);
+
                     *orfs = circkit::orfs::longest_orfs(&mut all_orfs);
                 },
                 |record, orfs| {
