@@ -16,19 +16,24 @@ circkit 0.1.0
 Benjamin D. Lee <benjamin.lee@chch.ox.ac.uk>
 
 USAGE:
-    circkit <SUBCOMMAND>
+    circkit [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
     -h, --help       Print help information
+    -q, --quiet      Less output per occurrence
+    -v, --verbose    More output per occurrence
     -V, --version    Print version information
 
 SUBCOMMANDS:
-    cat           concatenate sequences to themselves [aliases: concat, concatenate]
-    decat         deconcatenate sequences to themselves (this is the reverse of `cat`) [aliases:
-                      deconcat, deconcatenate, uncat, unconcatenate]
-    help          Print this message or the help of the given subcommand(s)
-    monomerize    Find monomers of (potentially) circular or multimeric sequences
-    normalize     Normalize circular sequences [aliases: canonicalize, canon]
+    canonicalize    Normalize circular sequences [aliases: canon]
+    cat             concatenate sequences to themselves [aliases: concat, concatenate]
+    decat           deconcatenate sequences to themselves (this is the reverse of `cat`)
+                        [aliases: deconcat, deconcatenate, uncat, unconcatenate]
+    help            Print this message or the help of the given subcommand(s)
+    monomerize      Find monomers of (potentially) circular or multimeric sequences
+    orfs            Find ORFs in circular sequences
+    rotate          Rotate circular sequences to the left or right
+    uniq            Deduplicate circular sequences
 ```
 
 ## Subcommands
@@ -41,9 +46,9 @@ For example, let's say you had a tool that does some sort of filtering on linear
 
 As a note, CircKit's `cat` is functionally equivalent to `seqkit concat file.fasta file.fasta`.
 
-### `normalize`
+### `canonicalize`
 
-`normalize` computes a single, canonical representation of a circular sequence. This is useful for comparing sequences that are the same but have different polarities or different starting positions. For example, the following two sequences are the same if they are circular:
+`canonicalize` computes a single, canonical representation of a circular sequence. This is useful for comparing sequences that are the same but have different polarities or different starting positions. For example, the following two sequences are the same if they are circular:
 
 ```text
 >seq1
@@ -59,11 +64,12 @@ We define the canonical representation as the lexicographically smallest rotatio
 There's still a lot to do before an initial release.
 Here's how it's going:
 
-- [ ] `rotate`
+- [x] `rotate`
 - [x] `cat`
 - [x] `decat`
-- [x] `normalize`
+- [x] `canonicalize`
 - [x] `monomerize`
+- [ ] `orfs` (in progress)
 - [ ] `grep`
 - [ ] `cluster` (future)
 - [ ] `prealign` (future)
