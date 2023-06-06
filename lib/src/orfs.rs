@@ -1,5 +1,7 @@
 use std::{collections::HashSet, vec};
 
+use aho_corasick::AhoCorasick;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Orf {
     /// The index of the start codon's first nucleotide.
@@ -34,12 +36,31 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
     let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
     let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
 
-    for i in 0..seq.len() - 2 {
-        let codon = &seq[i..i + 3];
-        if start_codons.contains(&codon) {
-            start_codon_indices_by_frame[i % 3].push(i);
-        } else if stop_codons.contains(&codon) {
-            stop_codon_indices_by_frame[i % 3].push(i);
+    // read from env whether to use aho-corasick or not
+    if std::env::var("AHO_CORASICK").is_err() {
+        for i in 0..seq.len() - 2 {
+            let codon = &seq[i..i + 3];
+            if start_codons.contains(&codon) {
+                start_codon_indices_by_frame[i % 3].push(i);
+            } else if stop_codons.contains(&codon) {
+                stop_codon_indices_by_frame[i % 3].push(i);
+            }
+        }
+    } else {
+        let patterns = start_codons
+            .iter()
+            .chain(stop_codons.iter())
+            .map(|s| s.as_bytes())
+            .collect::<Vec<_>>();
+        let ac = AhoCorasick::new(patterns).unwrap();
+
+        for mat in ac.find_overlapping_iter(seq) {
+            let i = mat.start();
+            if mat.pattern().as_usize() < start_codons.len() {
+                start_codon_indices_by_frame[i % 3].push(i);
+            } else {
+                stop_codon_indices_by_frame[i % 3].push(i);
+            }
         }
     }
 
