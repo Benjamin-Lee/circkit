@@ -408,6 +408,26 @@ mod test {
             }
 
             #[test]
+            fn test_bio_orfs_repeated(seq in "[ATGC]{3,300}") {
+                // Quadruple the sequence and make sure that the ORFs are the same
+                let dup_seq = format!("{}{}{}{}", seq, seq, seq, seq);
+                let finder = Finder::new(vec![b"ATG"], vec![b"TAA", b"TAG", b"TGA"], 0);
+                let bio_orfs: Vec<bio::seq_analysis::orf::Orf> = finder.find_all(dup_seq.as_bytes()).into_iter().collect::<Vec<_>>();
+                let circkit_orfs: Vec<Orf> = find_orfs(&seq);
+
+                // for each bio orf, make sure there is a circkit orf that is the same
+                for bio_orf in bio_orfs {
+                    let bio_orf_seq = dup_seq[bio_orf.start..bio_orf.end].to_owned();
+                    let circkit_orf = circkit_orfs.iter().find(|circkit_orf| {
+                        let circkit_orf_seq = circkit_orf.seq(seq.as_bytes());
+                        circkit_orf_seq == bio_orf_seq
+                    });
+
+                    prop_assert!(circkit_orf.is_some(), "Circkit ORF not found for bio {:?}", bio_orf);
+                }
+            }
+
+            #[test]
             fn orf_never_has_start_codon_as_stop_codon(seq in "[ATGC]{3,300}") {
                 let orfs = find_orfs(&seq);
                 for orf in orfs {
