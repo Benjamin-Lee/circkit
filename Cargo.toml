@@ -21,6 +21,7 @@ seq_io = "0.3.1"
 niffler = "2.5.0"
 rustc-hash = "1.1.0"
 num_cpus = "1.0"
+aho-corasick = "1.0.1"
 
 [dev-dependencies]
 assert_cmd = "2.0.4"

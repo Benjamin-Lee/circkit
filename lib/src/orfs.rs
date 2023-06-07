@@ -32,56 +32,115 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
     // Step 1: Find all stop and start codons by frame
     let start_codons = ["ATG"];
     let stop_codons = ["TAA", "TAG", "TGA"];
+    let patterns = start_codons
+        .iter()
+        .chain(stop_codons.iter())
+        .map(|s| s.as_bytes())
+        .collect::<Vec<_>>();
+    let ac = AhoCorasick::new(patterns).unwrap();
+    let (starts, stops) =
+        start_stop_codon_indices_by_frame_aho_corasick(&seq, &start_codons, &stop_codons, &ac);
+    find_orfs_with_indices(seq.len(), starts, stops)
+}
 
-    let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
-    let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
-
-    // read from env whether to use aho-corasick or not
-    if std::env::var("AHO_CORASICK").is_err() {
-        for i in 0..seq.len() - 2 {
-            let codon = &seq[i..i + 3];
-            if start_codons.contains(&codon) {
-                start_codon_indices_by_frame[i % 3].push(i);
-            } else if stop_codons.contains(&codon) {
-                stop_codon_indices_by_frame[i % 3].push(i);
-            }
-        }
-    } else {
-        let patterns = start_codons
-            .iter()
-            .chain(stop_codons.iter())
-            .map(|s| s.as_bytes())
-            .collect::<Vec<_>>();
-        let ac = AhoCorasick::new(patterns).unwrap();
-
-        for mat in ac.find_overlapping_iter(seq) {
-            let i = mat.start();
-            if mat.pattern().as_usize() < start_codons.len() {
-                start_codon_indices_by_frame[i % 3].push(i);
-            } else {
-                stop_codon_indices_by_frame[i % 3].push(i);
-            }
-        }
-    }
-
+/// A helper function to add the last two codons to a computed codon index
+pub fn add_last_codons(seq: &str, codons: &[&str], codon_indices_by_frame: &mut Vec<Vec<usize>>) {
     // Handle the last two codons wrapping around
     let penultimate_codon = format!("{}{}", &seq[seq.len() - 2..], &seq[..1]);
     debug_assert!(penultimate_codon.len() == 3);
-    if start_codons.contains(&penultimate_codon.as_str()) {
-        start_codon_indices_by_frame[(seq.len() - 2) % 3].push(seq.len() - 2);
-    } else if stop_codons.contains(&penultimate_codon.as_str()) {
-        stop_codon_indices_by_frame[(seq.len() - 2) % 3].push(seq.len() - 2);
+    if codons.contains(&penultimate_codon.as_str()) {
+        codon_indices_by_frame[(seq.len() - 2) % 3].push(seq.len() - 2);
     }
 
     let ultimate_codon = format!("{}{}", &seq[seq.len() - 1..], &seq[..2]);
     debug_assert!(ultimate_codon.len() == 3);
-    if start_codons.contains(&ultimate_codon.as_str()) {
-        start_codon_indices_by_frame[(seq.len() - 1) % 3].push(seq.len() - 1);
-    } else if stop_codons.contains(&ultimate_codon.as_str()) {
-        stop_codon_indices_by_frame[(seq.len() - 1) % 3].push(seq.len() - 1);
+    if codons.contains(&ultimate_codon.as_str()) {
+        codon_indices_by_frame[(seq.len() - 1) % 3].push(seq.len() - 1);
+    }
+}
+
+pub fn start_stop_codon_indices_by_frame_naive(
+    seq: &str,
+    start_codons: &[&str],
+    stop_codons: &[&str],
+) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
+    let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+    let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+
+    for i in 0..seq.len() - 2 {
+        let codon = &seq[i..i + 3];
+        if start_codons.contains(&codon) {
+            start_codon_indices_by_frame[i % 3].push(i);
+        } else if stop_codons.contains(&codon) {
+            stop_codon_indices_by_frame[i % 3].push(i);
+        }
     }
 
-    // Step 3: Find the longest ORF for each start codon
+    add_last_codons(seq, start_codons, &mut start_codon_indices_by_frame);
+    add_last_codons(seq, stop_codons, &mut stop_codon_indices_by_frame);
+
+    (start_codon_indices_by_frame, stop_codon_indices_by_frame)
+}
+
+pub fn start_stop_codon_indices_by_frame_iter(
+    seq: &str,
+    start_codons: &[&str],
+    stop_codons: &[&str],
+) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
+    let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+    let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+
+    for (i, codon) in seq
+        .as_bytes()
+        .into_iter()
+        .cycle()
+        .take(seq.len() + 2)
+        .copied()
+        .collect::<Vec<_>>()
+        .windows(3)
+        .enumerate()
+    {
+        if start_codons.contains(&std::str::from_utf8(codon).unwrap()) {
+            start_codon_indices_by_frame[i % 3].push(i);
+        } else if stop_codons.contains(&std::str::from_utf8(codon).unwrap()) {
+            stop_codon_indices_by_frame[i % 3].push(i);
+        }
+    }
+
+    (start_codon_indices_by_frame, stop_codon_indices_by_frame)
+}
+
+pub fn start_stop_codon_indices_by_frame_aho_corasick(
+    seq: &str,
+    start_codons: &[&str],
+    stop_codons: &[&str],
+    aho_corasick: &AhoCorasick,
+) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
+    let mut start_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+    let mut stop_codon_indices_by_frame = vec![Vec::new(), Vec::new(), Vec::new()];
+
+    for mat in aho_corasick.find_overlapping_iter(seq) {
+        let i = mat.start();
+        if mat.pattern().as_usize() < start_codons.len() {
+            start_codon_indices_by_frame[i % 3].push(i);
+        } else {
+            stop_codon_indices_by_frame[i % 3].push(i);
+        }
+    }
+
+    // Handle the last two codons wrapping around
+    add_last_codons(seq, start_codons, &mut start_codon_indices_by_frame);
+    add_last_codons(seq, stop_codons, &mut stop_codon_indices_by_frame);
+
+    (start_codon_indices_by_frame, stop_codon_indices_by_frame)
+}
+
+pub fn find_orfs_with_indices(
+    seq_len: usize,
+    start_codon_indices_by_frame: Vec<Vec<usize>>,
+    stop_codon_indices_by_frame: Vec<Vec<usize>>,
+) -> Vec<Orf> {
+    // Find the longest ORF for each start codon
     let mut orfs = Vec::new();
 
     for &start_codon_index in start_codon_indices_by_frame.iter().flatten() {
@@ -91,7 +150,7 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
 
         // Find the next stop codon in the current frame
         // The normal case has the sequence being a multiple of 3, so any wrap around is in the same frame
-        if seq.len() % 3 == 0 {
+        if seq_len % 3 == 0 {
             // Find greater than or equal to the start codon index
             let stop_codon_index = stop_codon_indices_by_frame[current_frame]
                 .iter()
@@ -113,9 +172,9 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
                         // Case 1: The stop codon is after the start codon
                         true => stop - start_codon_index + 3,
                         // Case 2: The stop codon is before the start codon, so the ORF wraps around
-                        false => stop + seq.len() - start_codon_index + 3,
+                        false => stop + seq_len - start_codon_index + 3,
                     },
-                    None => seq.len(), // No stop codon, so the ORF is the entire sequence
+                    None => seq_len, // No stop codon, so the ORF is the entire sequence
                 },
             });
             continue;
@@ -138,13 +197,13 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
             });
             continue;
         } else {
-            orf_length += seq.len() - start_codon_index;
+            orf_length += seq_len - start_codon_index;
         }
 
         // Hard case: There is no stop codon in the current frame later in the sequence
         // We need to check the next frame (first round)
         // TODO: check performance of short form: (current_frame + (3 - seq.len() % 3)) % 3;
-        let current_frame = if seq.len() % 3 == 2 {
+        let current_frame = if seq_len % 3 == 2 {
             (current_frame + 1) % 3
         } else {
             (current_frame + 2) % 3
@@ -161,11 +220,11 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
             });
             continue;
         } else {
-            orf_length += seq.len();
+            orf_length += seq_len;
         }
 
         // There is no stop codon in the next frame, so we need to check the next frame (second round)
-        let current_frame = if seq.len() % 3 == 2 {
+        let current_frame = if seq_len % 3 == 2 {
             (current_frame + 1) % 3
         } else {
             (current_frame + 2) % 3
@@ -181,11 +240,11 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
             });
             continue;
         } else {
-            orf_length += seq.len();
+            orf_length += seq_len;
         }
 
         // Finally, we're back to the original frame, so we need to check up to the start codon
-        let current_frame = if seq.len() % 3 == 2 {
+        let current_frame = if seq_len % 3 == 2 {
             (current_frame + 1) % 3
         } else {
             (current_frame + 2) % 3
@@ -451,6 +510,15 @@ mod test {
                     prop_assert!(orfs.contains(&orf), "Longest ORF: {:?} is not in all ORFs: {:?}", orf, orfs);
                 }
                 prop_assert!(longest_orfs.len() <= orfs.len(), "Longest ORFs: {:?} is not a subset of all ORFs: {:?}", longest_orfs, orfs);
+            }
+
+            #[test]
+            fn indexing_is_identical(seq in "[ATGC]{3,300}"){
+                let start_codons = ["ATG"];
+                let stop_codons = ["TAA", "TAG", "TGA"];
+                let ac = aho_corasick::AhoCorasick::new(&["ATG", "TAA", "TAG", "TGA"]).unwrap();
+                prop_assert_eq!(start_stop_codon_indices_by_frame_naive(&seq, &start_codons, &stop_codons), start_stop_codon_indices_by_frame_iter(&seq, &start_codons, &stop_codons));
+                prop_assert_eq!(start_stop_codon_indices_by_frame_naive(&seq, &start_codons, &stop_codons), start_stop_codon_indices_by_frame_aho_corasick(&seq, &start_codons, &stop_codons, &ac));
             }
 
         }
