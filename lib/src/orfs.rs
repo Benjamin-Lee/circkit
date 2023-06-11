@@ -15,16 +15,25 @@ pub struct Orf {
 
 // this function converts an Orf into a string with the ORF sequence
 impl Orf {
-    pub fn seq(&self, seq: &[u8]) -> String {
+    pub fn seq_with_opts(&self, seq: &[u8], include_stop: bool) -> String {
         // use a cyclical iterator to get the nucleotides, starting at the start codon
         let nucleotides = seq
             .iter()
             .cycle()
             .skip(self.start)
-            .take(self.length)
+            .take(
+                self.length
+                    - match include_stop {
+                        true => 0,
+                        false => 3,
+                    },
+            )
             .copied()
             .collect::<Vec<_>>();
         String::from_utf8(nucleotides).unwrap()
+    }
+    pub fn seq(&self, seq: &[u8]) -> String {
+        self.seq_with_opts(seq, true)
     }
 }
 
@@ -59,6 +68,7 @@ pub fn add_last_codons(seq: &str, codons: &[&str], codon_indices_by_frame: &mut 
     }
 }
 
+/// Computes the indices of start and stop codons in a sequence using a simple sliding window
 pub fn start_stop_codon_indices_by_frame_naive(
     seq: &str,
     start_codons: &[&str],
@@ -82,6 +92,7 @@ pub fn start_stop_codon_indices_by_frame_naive(
     (start_codon_indices_by_frame, stop_codon_indices_by_frame)
 }
 
+/// Compute the indices of all start and stop codons in the sequence by frame using a Rust iterator
 pub fn start_stop_codon_indices_by_frame_iter(
     seq: &str,
     start_codons: &[&str],
@@ -110,6 +121,7 @@ pub fn start_stop_codon_indices_by_frame_iter(
     (start_codon_indices_by_frame, stop_codon_indices_by_frame)
 }
 
+/// Compute the indices of all start and stop codons in the sequence by frame using the Aho-Corasick algorithm
 pub fn start_stop_codon_indices_by_frame_aho_corasick(
     seq: &str,
     start_codons: &[&str],

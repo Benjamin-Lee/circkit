@@ -144,6 +144,18 @@ pub enum Command {
         /// The minimum length of the ORF to keep (in nt)
         #[clap(short, long, default_value = "75")]
         min_length: usize,
+        /// The start codons to use. For multiple codons, use a comma-separated list, e.g. "ATG,GTG"
+        #[clap(long, default_value = "ATG")]
+        start_codons: String,
+        /// The stop codons to use. For multiple codons, use a comma-separated list, e.g. "TAA,TAG,TGA"
+        #[clap(long, default_value = "TAA,TAG,TGA")]
+        stop_codons: String,
+        /// Whether to include the stop codon in the output sequence
+        #[clap(long, action)]
+        include_stop: bool,
+        /// When used, don't allow ORFs to wrap around the end of the sequence.
+        #[clap(long, action)]
+        no_wrap: bool,
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,
