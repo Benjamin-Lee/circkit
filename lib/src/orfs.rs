@@ -147,6 +147,10 @@ pub fn start_stop_codon_indices_by_frame_aho_corasick(
     (start_codon_indices_by_frame, stop_codon_indices_by_frame)
 }
 
+/// The actual ORF finding logic.
+///
+/// This code only works in one polarity, so it will need to be called if you want to find all ORFs in a given sequence.
+/// However, it does find all ORFs in the three reading frames.
 pub fn find_orfs_with_indices(
     seq_len: usize,
     start_codon_indices_by_frame: Vec<Vec<usize>>,
