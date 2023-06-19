@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+use crate::orfs::Strand;
+
 #[derive(Parser)]
 #[clap(name = "circkit", author, version, about, long_about = None)]
 pub struct Cli {
@@ -153,9 +155,18 @@ pub enum Command {
         /// Whether to include the stop codon in the output sequence
         #[clap(long, action)]
         include_stop: bool,
-        /// When used, don't allow ORFs to wrap around the end of the sequence.
+        /// Whether to require a stop codon in the ORF. Required by default. If enabled, partial ORFs are allowed (e.g. ATG AAA GTC)
         #[clap(long, action)]
-        no_wrap: bool,
+        no_stop_required: bool,
+        /// When present, the minimum number of wraps around the origin an ORF must have in order to be output. Values greater than 0 mean that ORFs must take advantage or sequence circularity.
+        #[clap(long, default_value = "0")]
+        min_wraps: usize,
+        /// When present, the maximum number of wraps around the origin an ORF can have in order to be output. Setting this to 0 means that this function acts as a traditional ORF finder. The most possible wraps is 3.
+        #[clap(long, default_value = "3")]
+        max_wraps: usize,
+        /// The strands in which to search for ORFs
+        #[clap(long, arg_enum, default_value_t = Strand::Both)]
+        strand: Strand,
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,

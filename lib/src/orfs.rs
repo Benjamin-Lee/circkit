@@ -8,7 +8,8 @@ pub struct Orf {
     pub start: usize,
     /// The index of the stop codon's first nucleotide. Might be `None` if there is no stop codon.
     pub stop: Option<usize>,
-    pub frame_shift: usize,
+    /// How many times did this ORF wrap around the origin
+    pub wraps: usize,
     /// The length of the ORF in nucleotides, including the start and stop codons.
     pub length: usize,
 }
@@ -182,7 +183,13 @@ pub fn find_orfs_with_indices(
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: stop_codon_index,
-                frame_shift: 0,
+                wraps: if stop_codon_index < Some(start_codon_index)
+                    || (stop_codon_index.is_some() && seq_len - stop_codon_index.unwrap() < 3)
+                {
+                    1
+                } else {
+                    0
+                },
                 length: match stop_codon_index {
                     Some(stop) => match stop >= start_codon_index {
                         // Case 1: The stop codon is after the start codon
@@ -207,8 +214,8 @@ pub fn find_orfs_with_indices(
         if let Some(stop) = stop_codon_index {
             orfs.push(Orf {
                 start: start_codon_index,
-                stop: Some(stop),
-                frame_shift: 0,
+                stop: stop_codon_index,
+                wraps: if seq_len - stop >= 3 { 0 } else { 1 },
                 length: stop - start_codon_index + 3,
             });
             continue;
@@ -231,7 +238,7 @@ pub fn find_orfs_with_indices(
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: Some(stop),
-                frame_shift: 1,
+                wraps: if seq_len - stop >= 3 { 1 } else { 2 },
                 length: orf_length + stop + 3,
             });
             continue;
@@ -251,7 +258,7 @@ pub fn find_orfs_with_indices(
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: Some(stop),
-                frame_shift: 2,
+                wraps: if seq_len - stop >= 3 { 2 } else { 3 },
                 length: orf_length + stop + 3,
             });
             continue;
@@ -271,7 +278,7 @@ pub fn find_orfs_with_indices(
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: Some(stop),
-                frame_shift: 3,
+                wraps: 3,
                 length: orf_length + stop + 3,
             });
             continue;
@@ -282,7 +289,7 @@ pub fn find_orfs_with_indices(
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: None,
-                frame_shift: 3,
+                wraps: 3,
                 length: orf_length,
             });
         }
@@ -312,8 +319,24 @@ mod test {
     use super::*;
 
     #[test]
+    fn regular_linear_orf() {
+        let seq: &str = "AAAATGCCCCCCCCCTAA";
+        //                  ^^^123123123^^^
+        let orfs = find_orfs(seq);
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 3,
+                stop: Some(15),
+                wraps: 0,
+                length: 15
+            }]
+        );
+    }
+
+    #[test]
     fn wrap_around_once_mod_0() {
-        let seq = "GCATAAGCAATG";
+        let seq: &str = "GCATAAGCAATG";
         //                        ^^^
         //               123^^^
         let orfs = find_orfs(seq);
@@ -322,8 +345,25 @@ mod test {
             vec![Orf {
                 start: 9,
                 stop: Some(3),
-                frame_shift: 0,
+                wraps: 1,
                 length: 9
+            }]
+        );
+    }
+
+    #[test]
+    fn wrap_around_once_mod_0_partial_stop() {
+        let seq = "AATGAAAAAAAAATA";
+        //                ^^^123123123^^
+        //               ^
+        let orfs = find_orfs(seq);
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 1,
+                stop: Some(13),
+                wraps: 1,
+                length: 15
             }]
         );
     }
@@ -339,7 +379,7 @@ mod test {
             vec![Orf {
                 start: 7,
                 stop: Some(3),
-                frame_shift: 1,
+                wraps: 1,
                 length: 9
             }]
         );
@@ -356,8 +396,25 @@ mod test {
             vec![Orf {
                 start: 8,
                 stop: Some(3),
-                frame_shift: 1,
+                wraps: 1,
                 length: 9
+            }]
+        );
+    }
+
+    #[test]
+    fn wrap_around_once_mod_2_partial_stop() {
+        let seq = "ATGAAAAAAAAATA";
+        //               ^^^123123123^^
+        //               ^
+        let orfs = find_orfs(seq);
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 0,
+                stop: Some(12),
+                wraps: 1,
+                length: 15
             }]
         );
     }
@@ -375,7 +432,7 @@ mod test {
             vec![Orf {
                 start: 0,
                 stop: Some(1),
-                frame_shift: 2,
+                wraps: 2,
                 length: 30
             },]
         );
@@ -394,9 +451,27 @@ mod test {
             vec![Orf {
                 start: 1,
                 stop: Some(6),
-                frame_shift: 2,
+                wraps: 2,
                 length: 30
             },]
+        );
+    }
+
+    #[test]
+    fn wrap_around_twice_mod_2_partial_stop() {
+        let seq: &str = "ACATACGCATG";
+        //                       ^^^
+        //               123123123^^
+        //               ^
+        let orfs = find_orfs(seq);
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 8,
+                stop: Some(9),
+                wraps: 2,
+                length: 15
+            }]
         );
     }
 
@@ -414,7 +489,64 @@ mod test {
         assert_eq!(orf.start, 46);
         assert_eq!(orf.stop.unwrap(), 28);
         assert_eq!(orf.seq(seq.as_bytes()), "ATGCTCGTGGCGTCCCTACCGGGTCGGAGAATTGGGTCAGTTTCGGGCTTAAAAACTCTGACTTGTCATGCTCGTGGCGTCCCTACCGGGTCGGAGAATTGGGTCAGTTTCGGGCTTAAAAACTCTGACTTGTCATGCTCGTGGCGTCCCTACCGGGTCGGAGAATTGGGTCAGTTTCGGGCTTAA");
-        assert_eq!(orf.frame_shift, 3);
+        assert_eq!(orf.wraps, 3);
+    }
+
+    #[test]
+    fn wrap_around_three_times_mod_2_partial_stop() {
+        let seq: &str = "AATGCAAAAAAATA";
+        //                ^^^1231231231
+        //               23123123123123
+        //               123123123123^^
+        //               ^
+
+        let orfs = find_orfs(seq);
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 1,
+                stop: Some(12),
+                wraps: 3,
+                length: 42
+            },]
+        );
+    }
+    #[test]
+    fn partial_wrap_end_mod_0() {
+        let seq: &str = "AAATGGCATACT";
+        //                 ^^^123123^
+        //               ^^
+
+        let orfs = find_orfs(seq);
+
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 2,
+                stop: Some(11),
+                wraps: 1,
+                length: 12
+            }]
+        )
+    }
+
+    #[test]
+    fn partial_wrap_end() {
+        let seq: &str = "ATGGCATA";
+        //               ^^^123^^
+        //               ^
+
+        let orfs = find_orfs(seq);
+
+        assert_eq!(
+            orfs,
+            vec![Orf {
+                start: 0,
+                stop: Some(6),
+                wraps: 1,
+                length: 9
+            }]
+        )
     }
 
     #[test]
@@ -430,7 +562,7 @@ mod test {
             vec![Orf {
                 start: 0,
                 stop: Some(6),
-                frame_shift: 0,
+                wraps: 0,
                 length: 9
             }]
         );
@@ -454,30 +586,29 @@ mod test {
                         circkit_orf.start == bio_orf.start && circkit_orf.stop.unwrap() + 3 == bio_orf.end
                     });
 
+                    // We must find all ORFs that Rust-Bio does
                     prop_assert!(circkit_orf.is_some(), "Circkit ORF: {:?} not found in bio orf: {:?}", circkit_orf, bio_orf);
+
+                    // We know that Rust-Bio doesn't work on wrapped ORFs, so any one that matches should not be wrapped
+                    prop_assert_eq!(circkit_orf.unwrap().wraps, 0, "Circkit ORF: {:?} ({:?}) should not be a wrapped ORF", circkit_orf, circkit_orf.unwrap().seq(&seq.as_bytes()));
+
                     if circkit_orf.is_some() {
                         prop_assert_eq!((circkit_orf.unwrap().start % 3) as i8, bio_orf.offset, "Circkit {:?} not in same offset as Bio {:?}", circkit_orf, bio_orf);
                     }
                 }
 
-                // ensure that each ORF that was found by circkit but not bio is a wrapped ORF
+                // ensure that each ORF that was found by circkit but not Rust-Bio is a wrapped ORF
                 for circkit_orf in circkit_orfs {
                     let bio_orf = &bio_orfs.iter().find(|bio_orf| {
                         circkit_orf.start == bio_orf.start && circkit_orf.stop.unwrap_or_default() + 3 == bio_orf.end
                     });
-                    if bio_orf.is_none() {
-                        // one reason bio might miss an ORF is if it wrapped around a divisible sequence
-                        if seq.len() % 3 == 0 {
-                            if let Some(stop) = circkit_orf.stop {
-                                // the seq.len() - stop <= 2 is there because we might have a wrap the is less than an entire codon's length
-                                prop_assert!(circkit_orf.start > stop || seq.len() - stop <= 2, "{:?} should have a start position greater than the stop position", circkit_orf);
-                            }
-                        }
 
-                        // otherwise, we had a frame shift wrap around
-                        if seq.len() % 3 != 0 {
-                            prop_assert!(circkit_orf.frame_shift > 0 || seq.len() - circkit_orf.stop.unwrap_or_default() <= 2, "{:?} should have a frame shift", circkit_orf);
-                        }
+                    if circkit_orf.wraps == 0 {
+                        prop_assert!(bio_orf.is_some())
+                    }
+
+                    if bio_orf.is_none() {
+                        prop_assert_ne!(circkit_orf.wraps, 0, "{:?} should be a wrapped ORF", circkit_orf);
                     }
                 }
             }
@@ -536,7 +667,6 @@ mod test {
                 prop_assert_eq!(start_stop_codon_indices_by_frame_naive(&seq, &start_codons, &stop_codons), start_stop_codon_indices_by_frame_iter(&seq, &start_codons, &stop_codons));
                 prop_assert_eq!(start_stop_codon_indices_by_frame_naive(&seq, &start_codons, &stop_codons), start_stop_codon_indices_by_frame_aho_corasick(&seq, &start_codons, &stop_codons, &ac));
             }
-
         }
     }
 }

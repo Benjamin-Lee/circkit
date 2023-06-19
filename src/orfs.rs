@@ -4,6 +4,13 @@ use crate::{
 };
 use seq_io::{fasta::Record, parallel::parallel_fasta};
 
+#[derive(clap::ArgEnum, Clone, Debug)]
+pub enum Strand {
+    Forward,
+    Reverse,
+    Both,
+}
+
 pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
         Command::Orfs {
@@ -13,7 +20,10 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
             start_codons,
             stop_codons,
             include_stop,
-            no_wrap,
+            min_wraps,
+            max_wraps,
+            strand,
+            no_stop_required,
             threads,
         } => {
             let reader = input_to_reader(input)?;
@@ -27,7 +37,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                 reader,
                 *threads,
                 64,
-                |record, orfs| {
+                |record, orfs: &mut (Vec<circkit::orfs::Orf>, Vec<circkit::orfs::Orf>)| {
                     // runs in worker
                     let normalized = match needletail::sequence::normalize(record.seq(), false) {
                         Some(x) => x,
@@ -43,20 +53,18 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     let mut all_orfs =
                         circkit::orfs::find_orfs_with_indices(normalized.len(), starts, stops);
 
-                    // length filtering
-                    all_orfs.retain(|orf| orf.length >= *min_length);
+                    // length filtering, stop codon requirement (with optional bypass), and wrap filtering
+                    all_orfs.retain(|orf| {
+                        (orf.length - 3 >= *min_length)
+                            && (*no_stop_required || orf.stop.is_some())
+                            && (*min_wraps <= orf.wraps)
+                            && (orf.wraps <= *max_wraps)
+                    });
 
-                    // wrap filtering with divisibility by 3
-                    if *no_wrap {
-                        all_orfs.retain(|orf| {
-                            orf.start < orf.stop.unwrap_or(orf.length) && orf.length % 3 == 0
-                        });
-                    }
-
-                    *orfs = circkit::orfs::longest_orfs(&mut all_orfs);
+                    orfs.0 = circkit::orfs::longest_orfs(&mut all_orfs);
                 },
                 |record, orfs| {
-                    for orf in orfs {
+                    for orf in &orfs.0 {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
                         writer.write_all(b" ORF").unwrap();
