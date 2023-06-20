@@ -4,7 +4,7 @@ use crate::{
 };
 use seq_io::{fasta::Record, parallel::parallel_fasta};
 
-#[derive(clap::ArgEnum, Clone, Debug)]
+#[derive(clap::ArgEnum, Clone, Debug, PartialEq)]
 pub enum Strand {
     Forward,
     Reverse,
@@ -37,7 +37,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                 reader,
                 *threads,
                 64,
-                |record, orfs: &mut (Vec<circkit::orfs::Orf>, Vec<circkit::orfs::Orf>)| {
+                |record, orfs: &mut (Vec<circkit::orfs::Orf>, Vec<circkit::orfs::Orf>, Vec<u8>)| {
                     // runs in worker
                     let normalized = match needletail::sequence::normalize(record.seq(), false) {
                         Some(x) => x,
@@ -62,6 +62,29 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     });
 
                     orfs.0 = circkit::orfs::longest_orfs(&mut all_orfs);
+
+                    orfs.1 = if *strand == Strand::Both || *strand == Strand::Reverse {
+                        orfs.2 = bio::alphabets::dna::revcomp(&normalized);
+                        let (starts, stops) =
+                            circkit::orfs::start_stop_codon_indices_by_frame_naive(
+                                &std::str::from_utf8(&orfs.2).unwrap(),
+                                &start_codons,
+                                &stop_codons,
+                            );
+
+                        let mut all_rc_orfs =
+                            circkit::orfs::find_orfs_with_indices(normalized.len(), starts, stops);
+                        all_rc_orfs.retain(|orf| {
+                            (orf.length - 3 >= *min_length)
+                                && (*no_stop_required || orf.stop.is_some())
+                                && (*min_wraps <= orf.wraps)
+                                && (orf.wraps <= *max_wraps)
+                        });
+                        circkit::orfs::longest_orfs(&mut all_rc_orfs)
+                    } else {
+                        orfs.2.clear();
+                        Vec::new()
+                    };
                 },
                 |record, orfs| {
                     for orf in &orfs.0 {
@@ -75,6 +98,17 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                                 orf.seq_with_opts(&record.full_seq(), *include_stop)
                                     .as_bytes(),
                             )
+                            .unwrap();
+                        writer.write_all(b"\n").unwrap();
+                    }
+                    for orf in &orfs.1 {
+                        writer.write_all(b">").unwrap();
+                        writer.write_all(record.head()).unwrap();
+                        writer.write_all(b" ORF").unwrap();
+                        writer.write_all(orf.start.to_string().as_bytes()).unwrap();
+                        writer.write_all(b" RC\n").unwrap();
+                        writer
+                            .write_all(orf.seq_with_opts(&orfs.2, *include_stop).as_bytes())
                             .unwrap();
                         writer.write_all(b"\n").unwrap();
                     }
