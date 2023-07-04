@@ -22,6 +22,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
             include_stop,
             min_wraps,
             max_wraps,
+            min_ratio,
             strand,
             no_stop_required,
             threads,
@@ -59,6 +60,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                             && (*no_stop_required || orf.stop.is_some())
                             && (*min_wraps <= orf.wraps)
                             && (orf.wraps <= *max_wraps)
+                            && (orf.length as f64 / normalized.len() as f64 >= *min_ratio)
                     });
 
                     orfs.0 = circkit::orfs::longest_orfs(&mut all_orfs);
@@ -79,6 +81,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                                 && (*no_stop_required || orf.stop.is_some())
                                 && (*min_wraps <= orf.wraps)
                                 && (orf.wraps <= *max_wraps)
+                                && (orf.length as f64 / normalized.len() as f64 >= *min_ratio)
                         });
                         circkit::orfs::longest_orfs(&mut all_rc_orfs)
                     } else {

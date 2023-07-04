@@ -167,6 +167,9 @@ pub enum Command {
         /// The strands in which to search for ORFs
         #[clap(long, arg_enum, default_value_t = Strand::Both)]
         strand: Strand,
+        /// The minimum ORF length to sequence length ratio to keep. A ratio of 1 means that the ORF is as long as the sequence. A ratio of 2 means that the ORF would wrap around the origin twice.
+        #[clap(long, default_value = "0")]
+        min_ratio: f64,
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,
