@@ -154,7 +154,9 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                 },
             )?;
             writer.flush()?;
-
+            if let Some(mut table_writer) = table_writer {
+                table_writer.flush()?;
+            }
             Ok(())
         }
         _ => panic!("input command is not for monomerize"),
