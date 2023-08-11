@@ -6,6 +6,13 @@ use crate::{
     utils::{input_to_reader, output_to_writer},
 };
 
+#[derive(serde::Serialize)]
+struct Row {
+    id: String,
+    original_length: usize,
+    monomer_length: usize,
+}
+
 pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
         Command::Monomerize {
@@ -16,6 +23,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
             max_mismatch,
             min_identity,
             keep_all,
+            table,
             threads,
             batch_size,
             min_overlap,
@@ -36,6 +44,17 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
+            let mut table_writer = match table {
+                Some(path) => Some(
+                    csv::WriterBuilder::new()
+                        .delimiter(match path.extension().and_then(|x| x.to_str()) {
+                            Some("tsv") => b'\t',
+                            _ => b',',
+                        })
+                        .from_path(path)?,
+                ),
+                None => None,
+            };
 
             parallel_fasta(
                 reader,
@@ -119,6 +138,17 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                         writer.write_all(b"\n").unwrap();
                         writer.write_all(&full_seq[..end_idx]).unwrap();
                         writer.write_all(b"\n").unwrap();
+
+                        // write the table file if it was requested
+                        if let Some(ref mut table_writer) = table_writer {
+                            table_writer
+                                .serialize(Row {
+                                    id: record.id().unwrap().to_string(),
+                                    original_length: full_seq.len(),
+                                    monomer_length: end_idx,
+                                })
+                                .expect("failed to write to table")
+                        }
                     }
                     None::<()>
                 },

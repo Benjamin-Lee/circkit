@@ -53,6 +53,13 @@ pub enum Command {
         #[clap(short, long)]
         keep_all: bool,
 
+        /// A path for the monomerization metadata for each sequence.
+        /// The following columns are output: id, original_length, monomer_length.
+        /// The file is output as a CSV or TSV depending on the file extension.
+        /// Note that if no sequences are output, the output table will be an empty file.
+        #[clap(long)]
+        table: Option<PathBuf>,
+
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,
