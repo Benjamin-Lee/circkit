@@ -69,8 +69,8 @@ Here's how it's going:
 - [x] `decat`
 - [x] `canonicalize`
 - [x] `monomerize`
-- [ ] `orfs` (in progress)
-- [ ] `grep`
+- [x] `orfs`
+- [ ] ~~`grep`~~ (use `seqkit grep` instead)
 - [ ] `cluster` (future)
 - [ ] `prealign` (future)
 
