@@ -36,7 +36,7 @@ pub fn rotate(cmd: &Command) -> anyhow::Result<()> {
 
                 let rotation_index = match new_start_index >= 0 {
                     true => full_seq.len() - (new_start_index as usize % full_seq.len()),
-                    false => new_start_index.abs() as usize % full_seq.len(),
+                    false => new_start_index.unsigned_abs() as usize % full_seq.len(),
                 };
 
                 writer.write_all(&full_seq[rotation_index..]).unwrap();

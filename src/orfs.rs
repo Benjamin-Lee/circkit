@@ -46,7 +46,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     };
 
                     let (starts, stops) = circkit::orfs::start_stop_codon_indices_by_frame_naive(
-                        &std::str::from_utf8(&normalized).unwrap(),
+                        std::str::from_utf8(&normalized).unwrap(),
                         &start_codons,
                         &stop_codons,
                     );
@@ -69,7 +69,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                         orfs.2 = bio::alphabets::dna::revcomp(&normalized);
                         let (starts, stops) =
                             circkit::orfs::start_stop_codon_indices_by_frame_naive(
-                                &std::str::from_utf8(&orfs.2).unwrap(),
+                                std::str::from_utf8(&orfs.2).unwrap(),
                                 &start_codons,
                                 &stop_codons,
                             );

@@ -49,12 +49,12 @@ pub fn find_orfs(seq: &str) -> Vec<Orf> {
         .collect::<Vec<_>>();
     let ac = AhoCorasick::new(patterns).unwrap();
     let (starts, stops) =
-        start_stop_codon_indices_by_frame_aho_corasick(&seq, &start_codons, &stop_codons, &ac);
+        start_stop_codon_indices_by_frame_aho_corasick(seq, &start_codons, &stop_codons, &ac);
     find_orfs_with_indices(seq.len(), starts, stops)
 }
 
 /// A helper function to add the last two codons to a computed codon index
-pub fn add_last_codons(seq: &str, codons: &[&str], codon_indices_by_frame: &mut Vec<Vec<usize>>) {
+pub fn add_last_codons(seq: &str, codons: &[&str], codon_indices_by_frame: &mut [Vec<usize>]) {
     // Handle the last two codons wrapping around
     let penultimate_codon = format!("{}{}", &seq[seq.len() - 2..], &seq[..1]);
     debug_assert!(penultimate_codon.len() == 3);
@@ -104,7 +104,7 @@ pub fn start_stop_codon_indices_by_frame_iter(
 
     for (i, codon) in seq
         .as_bytes()
-        .into_iter()
+        .iter()
         .cycle()
         .take(seq.len() + 2)
         .copied()
@@ -234,7 +234,7 @@ pub fn find_orfs_with_indices(
 
         // Find the next stop codon in the new current frame
         // Check if there is a stop codon in the next frame
-        if let Some(stop) = stop_codon_indices_by_frame[current_frame].get(0).copied() {
+        if let Some(stop) = stop_codon_indices_by_frame[current_frame].first().copied() {
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: Some(stop),
@@ -254,7 +254,7 @@ pub fn find_orfs_with_indices(
         };
 
         // Check if there is a stop codon in the next frame
-        if let Some(stop) = stop_codon_indices_by_frame[current_frame].get(0).copied() {
+        if let Some(stop) = stop_codon_indices_by_frame[current_frame].first().copied() {
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: Some(stop),
@@ -274,7 +274,7 @@ pub fn find_orfs_with_indices(
         };
 
         // Check if there is a stop codon in the next frame
-        if let Some(stop) = stop_codon_indices_by_frame[current_frame].get(0).copied() {
+        if let Some(stop) = stop_codon_indices_by_frame[current_frame].first().copied() {
             orfs.push(Orf {
                 start: start_codon_index,
                 stop: Some(stop),

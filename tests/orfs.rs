@@ -36,7 +36,7 @@ fn orfipy(
     cmd.arg("orfs")
         .arg(file.as_path())
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg("--start-codons")
         .arg("ATG,CTG,TTG")
         .arg("--max-wraps")

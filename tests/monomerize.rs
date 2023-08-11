@@ -21,7 +21,7 @@ fn fasta_files(
     cmd.arg("monomerize")
         .arg(file.as_path())
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg("--min-identity")
         .arg("0.95")
         .arg("-o")
@@ -50,7 +50,7 @@ fn min_overlap(#[values("1", "2", "4")] threads: &str) -> anyhow::Result<()> {
 
     cmd.arg("monomerize")
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg("--min-overlap")
         .arg("81");
 
@@ -71,7 +71,7 @@ fn min_overlap_percent(
 
     cmd.arg("monomerize")
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg("--min-overlap-percent")
         .arg(cutoff);
 

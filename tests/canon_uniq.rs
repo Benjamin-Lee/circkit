@@ -61,7 +61,7 @@ fn fasta_files(
     cmd.arg(command)
         .arg(file.as_path())
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg("-o")
         .arg(output.path());
 

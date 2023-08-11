@@ -26,7 +26,7 @@ fn compressed_output(
     cmd.arg(command)
         .arg(file.as_path())
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg("-o")
         .arg(output.path());
 
@@ -85,7 +85,7 @@ fn compressed_input(
 
     cmd.arg(command)
         .arg("--threads")
-        .arg(threads.to_string())
+        .arg(threads)
         .arg(file.as_path())
         .arg("-o")
         .arg(output.path());
