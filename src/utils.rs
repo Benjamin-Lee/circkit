@@ -72,16 +72,11 @@ pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Writ
 }
 
 pub fn table_path_to_writer(table: &Option<PathBuf>) -> Option<csv::Writer<File>> {
-    match table {
-        Some(path) => Some(
-            csv::WriterBuilder::new()
+    table.as_ref().map(|path| csv::WriterBuilder::new()
                 .delimiter(match path.extension().and_then(|x| x.to_str()) {
                     Some("tsv") => b'\t',
                     _ => b',',
                 })
                 .from_path(path)
-                .expect("Could not create output table."),
-        ),
-        None => None,
-    }
+                .expect("Could not create output table."))
 }
