@@ -3,7 +3,7 @@ use seq_io::{fasta::Record, parallel::parallel_fasta};
 
 use crate::{
     commands::Command,
-    utils::{input_to_reader, output_to_writer},
+    utils::{input_to_reader, output_to_writer, table_path_to_writer},
 };
 
 #[derive(serde::Serialize)]
@@ -44,17 +44,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
-            let mut table_writer = match table {
-                Some(path) => Some(
-                    csv::WriterBuilder::new()
-                        .delimiter(match path.extension().and_then(|x| x.to_str()) {
-                            Some("tsv") => b'\t',
-                            _ => b',',
-                        })
-                        .from_path(path)?,
-                ),
-                None => None,
-            };
+            let mut table_writer = table_path_to_writer(table);
 
             parallel_fasta(
                 reader,

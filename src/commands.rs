@@ -177,6 +177,18 @@ pub enum Command {
         /// The minimum ORF length to sequence length ratio to keep. A ratio of 1 means that the ORF is as long as the sequence. A ratio of 2 means that the ORF would wrap around the origin twice.
         #[clap(long, default_value = "0")]
         min_ratio: f64,
+        /// A path for the ORF-finding metadata for each sequence.
+        /// The following columns are output: orf_id, seq_id, start, stop, wraps, length, and ratio.
+        /// Both start and stop are 0-indexed.
+        /// When --no-stop-required is used, the stop column may be empty.
+        /// The wraps field corresponds to the number of wraps around the origin.
+        /// Note that the length is the length of the ORF and not the length of the sequence.
+        /// The --include-stop flag is taken into account when calculating the length.
+        /// The ratio field is the ratio of the ORF length to the sequence length.
+        /// The file is output as a CSV or TSV depending on the file extension.
+        /// Note that if no sequences are output, the output table will be an empty file.
+        #[clap(long)]
+        table: Option<PathBuf>,
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,

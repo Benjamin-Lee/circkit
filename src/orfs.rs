@@ -1,6 +1,6 @@
 use crate::{
     commands::Command,
-    utils::{input_to_reader, output_to_writer},
+    utils::{input_to_reader, output_to_writer, table_path_to_writer},
 };
 use seq_io::{fasta::Record, parallel::parallel_fasta};
 
@@ -9,6 +9,17 @@ pub enum Strand {
     Forward,
     Reverse,
     Both,
+}
+
+#[derive(serde::Serialize, Debug)]
+struct Row {
+    orf_id: String,
+    seq_id: String,
+    start: usize,
+    stop: Option<usize>,
+    wraps: usize,
+    length: usize,
+    ratio: f64,
 }
 
 pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
@@ -25,10 +36,12 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
             min_ratio,
             strand,
             no_stop_required,
+            table,
             threads,
         } => {
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
+            let mut table_writer = table_path_to_writer(table);
 
             // Step 1: Find all stop and start codons by frame
             let start_codons = start_codons.split(',').collect::<Vec<_>>();
@@ -90,6 +103,10 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     };
                 },
                 |record, orfs| {
+                    let head = std::str::from_utf8(record.head()).expect(
+                        "Could not convert FASTA record header to UTF-8. Are you sure it's ASCII?",
+                    );
+
                     for orf in &orfs.0 {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
@@ -103,6 +120,25 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                             )
                             .unwrap();
                         writer.write_all(b"\n").unwrap();
+
+                        // write the table file if it was requested
+                        if let Some(ref mut table_writer) = table_writer {
+                            table_writer
+                                .serialize(Row {
+                                    orf_id: format!("{} ORF{}", head, orf.start),
+                                    seq_id: head.to_string(),
+                                    start: orf.start,
+                                    stop: orf.stop,
+                                    wraps: orf.wraps,
+                                    length: orf.length
+                                        - match *include_stop {
+                                            true => 0,
+                                            false => 3,
+                                        },
+                                    ratio: orf.length as f64 / record.full_seq().len() as f64,
+                                })
+                                .expect("failed to write to table");
+                        }
                     }
                     for orf in &orfs.1 {
                         writer.write_all(b">").unwrap();
@@ -114,6 +150,28 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                             .write_all(orf.seq_with_opts(&orfs.2, *include_stop).as_bytes())
                             .unwrap();
                         writer.write_all(b"\n").unwrap();
+
+                        // write the table file if it was requested
+                        if let Some(ref mut table_writer) = table_writer {
+                            table_writer
+                                .serialize(Row {
+                                    orf_id: format!("{} ORF{} RC", head, orf.start),
+                                    seq_id: head.to_string(),
+                                    start: &orfs.2.len() - 1 - orf.start, // reverse complement coordinates back to forward strand
+                                    stop: match orf.stop {
+                                        Some(x) => Some(&orfs.2.len() - 1 - x),
+                                        None => None,
+                                    },
+                                    wraps: orf.wraps,
+                                    length: orf.length
+                                        - match *include_stop {
+                                            true => 0,
+                                            false => 3,
+                                        },
+                                    ratio: orf.length as f64 / record.full_seq().len() as f64,
+                                })
+                                .expect("failed to write to table");
+                        }
                     }
 
                     // Some(value) will stop the reader, and the value will be returned.
@@ -124,6 +182,9 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                 },
             )?;
             writer.flush()?;
+            if let Some(mut table_writer) = table_writer {
+                table_writer.flush()?;
+            }
         }
         _ => panic!("input command is not for orfs"),
     }

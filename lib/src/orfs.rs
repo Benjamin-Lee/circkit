@@ -4,9 +4,9 @@ use aho_corasick::AhoCorasick;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Orf {
-    /// The index of the start codon's first nucleotide.
+    /// The index of the start codon's first nucleotide. Zero-indexed.
     pub start: usize,
-    /// The index of the stop codon's first nucleotide. Might be `None` if there is no stop codon.
+    /// The index of the stop codon's first nucleotide. Might be `None` if there is no stop codon. Zero-indexed.
     pub stop: Option<usize>,
     /// How many times did this ORF wrap around the origin
     pub wraps: usize,
