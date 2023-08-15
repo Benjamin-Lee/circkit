@@ -14,6 +14,7 @@ circKit is a library for manipulating circular biological sequences such as DNA 
 $ circkit --help
 circkit 0.1.0
 Benjamin D. Lee <benjamin.lee@chch.ox.ac.uk>
+A toolkit for working with circular sequences.
 
 USAGE:
     circkit [OPTIONS] <SUBCOMMAND>
@@ -25,10 +26,9 @@ OPTIONS:
     -V, --version    Print version information
 
 SUBCOMMANDS:
-    canonicalize    Normalize circular sequences [aliases: canon]
-    cat             concatenate sequences to themselves [aliases: concat, concatenate]
-    decat           deconcatenate sequences to themselves (this is the reverse of `cat`)
-                        [aliases: deconcat, deconcatenate, uncat, unconcatenate]
+    canonicalize    Normalize circular sequences
+    cat             Concatenate sequences to themselves
+    decat           Deconcatenate sequences to themselves
     help            Print this message or the help of the given subcommand(s)
     monomerize      Find monomers of (potentially) circular or multimeric sequences
     orfs            Find ORFs in circular sequences

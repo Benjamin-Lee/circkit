@@ -80,7 +80,6 @@ pub enum Command {
         batch_size: usize,
     },
     /// Concatenate sequences to themselves
-    #[clap(visible_alias = "concat", visible_alias = "concatenate")]
     Cat {
         /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
@@ -91,12 +90,6 @@ pub enum Command {
     },
 
     /// Deconcatenate sequences to themselves
-    #[clap(
-        visible_alias = "deconcat",
-        visible_alias = "deconcatenate",
-        visible_alias = "uncat",
-        visible_alias = "unconcatenate"
-    )]
     Decat {
         /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
@@ -107,7 +100,6 @@ pub enum Command {
     },
 
     /// Normalize circular sequences.
-    #[clap(alias = "rotcanon", visible_alias = "canon")]
     Canonicalize {
         /// Input FASTA file. May be gzip, bzip, xz, or zstd compressed [default: stdin]
         input: Option<PathBuf>,
