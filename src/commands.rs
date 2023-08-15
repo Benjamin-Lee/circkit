@@ -150,7 +150,7 @@ pub enum Command {
         /// Output FASTA file path [default: stdout]
         #[clap(short, long)]
         output: Option<PathBuf>,
-        /// The minimum length of the ORF to keep (in nt)
+        /// The minimum length of the ORF to keep (in nt including the stop codon)
         #[clap(short, long, default_value = "75")]
         min_length: usize,
         /// The start codons to use. For multiple codons, use a comma-separated list, e.g. "ATG,GTG"
@@ -174,7 +174,10 @@ pub enum Command {
         /// The strands in which to search for ORFs
         #[clap(long, arg_enum, default_value_t = Strand::Both)]
         strand: Strand,
-        /// The minimum ORF length to sequence length ratio to keep. A ratio of 1 means that the ORF is as long as the sequence. A ratio of 2 means that the ORF would wrap around the origin twice.
+        /// The minimum ORF length to sequence length ratio to keep.
+        /// A ratio of 1 means that the ORF is as long as the sequence.
+        /// A ratio of 2 means that the ORF would wrap around the origin twice.
+        /// The stop codon is included in the length calculation regardless of the --include-stop flag.
         #[clap(long, default_value = "0")]
         min_ratio: f64,
         /// A path for the ORF-finding metadata for each sequence.
@@ -184,7 +187,7 @@ pub enum Command {
         /// Note that the length is the length of the ORF and not the length of the sequence.
         /// The --include-stop flag is taken into account when calculating the length.
         /// The wraps field corresponds to the number of wraps around the origin.
-        /// The ratio field is the ratio of the ORF length to the sequence length.
+        /// The ratio field is the ratio of the ORF length (including the stop codon regardless of --include-stop) to the sequence length.
         /// The file is output as a CSV or TSV depending on the file extension.
         /// Note that if no sequences are output, the output table will be an empty file.
         #[clap(long)]
