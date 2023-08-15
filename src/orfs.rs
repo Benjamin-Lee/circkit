@@ -17,8 +17,8 @@ struct Row {
     seq_id: String,
     start: usize,
     stop: Option<usize>,
-    wraps: usize,
     length: usize,
+    wraps: usize,
     ratio: f64,
 }
 
@@ -129,12 +129,12 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                                     seq_id: head.to_string(),
                                     start: orf.start,
                                     stop: orf.stop,
-                                    wraps: orf.wraps,
                                     length: orf.length
                                         - match *include_stop {
                                             true => 0,
                                             false => 3,
                                         },
+                                    wraps: orf.wraps,
                                     ratio: orf.length as f64 / record.full_seq().len() as f64,
                                 })
                                 .expect("failed to write to table");
@@ -162,12 +162,12 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                                         Some(x) => Some(&orfs.2.len() - 1 - x),
                                         None => None,
                                     },
-                                    wraps: orf.wraps,
                                     length: orf.length
                                         - match *include_stop {
                                             true => 0,
                                             false => 3,
                                         },
+                                    wraps: orf.wraps,
                                     ratio: orf.length as f64 / record.full_seq().len() as f64,
                                 })
                                 .expect("failed to write to table");

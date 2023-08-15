@@ -181,9 +181,9 @@ pub enum Command {
         /// The following columns are output: orf_id, seq_id, start, stop, wraps, length, and ratio.
         /// Both start and stop are 0-indexed.
         /// When --no-stop-required is used, the stop column may be empty.
-        /// The wraps field corresponds to the number of wraps around the origin.
         /// Note that the length is the length of the ORF and not the length of the sequence.
         /// The --include-stop flag is taken into account when calculating the length.
+        /// The wraps field corresponds to the number of wraps around the origin.
         /// The ratio field is the ratio of the ORF length to the sequence length.
         /// The file is output as a CSV or TSV depending on the file extension.
         /// Note that if no sequences are output, the output table will be an empty file.
