@@ -1,6 +1,6 @@
-# CircKit
+# circKit
 
-CircKit is a library for manipulating circular biological sequences such as DNA and RNA.
+circKit is a library for manipulating circular biological sequences such as DNA and RNA.
 
 ## Features
 
@@ -44,7 +44,7 @@ SUBCOMMANDS:
 
 For example, let's say you had a tool that does some sort of filtering on linear sequences. You could use `cat` to convert your circular sequences to linear sequences, run the tool, and then use `decat` to convert the output linear sequences back to circular sequences.
 
-As a note, CircKit's `cat` is functionally equivalent to `seqkit concat file.fasta file.fasta`.
+As a note, circKit's `cat` is functionally equivalent to `seqkit concat file.fasta file.fasta`.
 
 ### `canonicalize`
 
