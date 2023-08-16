@@ -37,6 +37,10 @@ assert_fs = "1.0"
 predicates = "3.0.3"
 rstest = "0.15.0"
 
+[profile.release]
+lto = true
+codegen-units = 1
+
 [workspace]
 
 [[bin]]
