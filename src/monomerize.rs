@@ -76,8 +76,8 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                         None => record.seq().to_vec(),
                     };
 
-                    // make sure the sequence is at least as long as the seed length
-                    if normalized.len() < monomerizer.seed_len {
+                    // make sure the sequence is at least as long as the seed length and the minimum length
+                    if normalized.len() < monomerizer.seed_len || normalized.len() < *min_length {
                         *idx = None;
                         return;
                     }
