@@ -22,12 +22,14 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
             seed_length,
             max_mismatch,
             min_identity,
+            min_overlap,
+            min_overlap_percent,
+            min_length,
+            max_length,
             keep_all,
             table,
             threads,
             batch_size,
-            min_overlap,
-            min_overlap_percent,
         } => {
             // region: some basic sanity checks
             if max_mismatch.is_some() && min_identity.is_some() {
@@ -90,24 +92,28 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     let full_seq = record.full_seq();
 
                     // region: check the monomer is long enough, either absolute or relative to the original sequence
-                    // absolute length
+
+                    // absolute monomer length
+                    if let Some(monomer_length) = *idx {
+                        if monomer_length < *min_length
+                            || monomer_length > max_length.unwrap_or(usize::MAX)
+                        {
+                            *idx = None; // reject the monomer
+                        }
+                    }
+
+                    // absolute overlap length
                     if let Some(min_overlap) = *min_overlap {
-                        if let Some(last_monomer_end_index) = *idx {
-                            if last_monomer_end_index < min_overlap {
+                        if let Some(monomer_length) = *idx {
+                            if full_seq.len() - monomer_length < min_overlap {
                                 *idx = None; // reject the monomer
                             }
                         }
                     }
 
-                    // relative length
+                    // relative overlap length
                     if let Some(min_overlap_percent) = *min_overlap_percent {
-                        if let Some(last_monomer_end_index) = *idx {
-                            let monomer_length = last_monomer_end_index;
-                            // dbg!(record.id().unwrap());
-                            // dbg!(
-                            //     (full_seq.len() - monomer_length) as f64 / (monomer_length as f64)
-                            // );
-                            // dbg!(min_overlap_percent);
+                        if let Some(monomer_length) = *idx {
                             // full_seq.len() - monomer_length is the length of the overlapping region
                             // a complete monomer would have an overlap ratio of 1.0
                             if (full_seq.len() - monomer_length) as f64 / (monomer_length as f64)
@@ -121,7 +127,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
                     // when keep_all is true, we write all sequences
                     // otherwise, we only write sequences that have been monomerized (i.e. the monomer index is Some)
-                    if idx.is_some() || *keep_all {
+                    if (idx.is_some()) || *keep_all {
                         let end_idx = idx.unwrap_or(full_seq.len());
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
@@ -133,7 +139,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                         if let Some(ref mut table_writer) = table_writer {
                             table_writer
                                 .serialize(Row {
-                                    id: record.id().unwrap().to_string(),
+                                    id: std::str::from_utf8(record.head()).unwrap().to_string(),
                                     original_length: full_seq.len(),
                                     monomer_length: end_idx,
                                 })

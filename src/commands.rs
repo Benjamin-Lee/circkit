@@ -53,10 +53,19 @@ pub enum Command {
         min_overlap: Option<usize>,
 
         /// Minimum length of the overlap (relative to the input sequence) to require.
+        /// A value of 1.0 means that the sequence must be a complete dimer.
         /// Can be used with --min-overlap for more stringent filtering.
         /// If --keep-all is used, sequences with too short of an overlap are still output but as the original sequence.
         #[clap(long)]
         min_overlap_percent: Option<f64>,
+
+        /// The minimum length of the monomer to keep (in nt).
+        #[clap(long, default_value_t = 0)]
+        min_length: usize,
+
+        /// The maximum length of the monomer to keep (in nt).
+        #[clap(long)]
+        max_length: Option<usize>,
 
         /// Whether to output sequences that did not have any overlap.
         /// These sequences could possibly be circular or multimeric since they failed to monomerize.
