@@ -38,7 +38,7 @@ predicates = "3.0.3"
 rstest = "0.15.0"
 
 [profile.release]
-lto = true
+lto = "fat"
 codegen-units = 1
 
 [workspace]
