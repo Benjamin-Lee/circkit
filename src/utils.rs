@@ -30,7 +30,7 @@ pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Writ
     match output {
         Some(output) => {
             // match the suffix of outout to see if it should be compressed
-            let suffix = output.extension().unwrap().to_str().unwrap();
+            let suffix = output.extension().unwrap_or_default().to_str().unwrap();
 
             let compression_format = match suffix {
                 "gz" => niffler::send::compression::Format::Gzip,
