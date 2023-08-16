@@ -22,7 +22,7 @@ log = "0.4.17"
 circkit = { path = "lib" }
 anyhow = "1.0"
 needletail = "0.5.1"
-seq_io = "0.3.1"
+seq_io = "0.3.2"
 niffler = "2.5.0"
 rustc-hash = "1.1.0"
 num_cpus = "1.0"
