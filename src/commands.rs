@@ -136,6 +136,13 @@ pub enum Command {
         #[clap(short, long, alias = "norm", alias = "canonicalize", alias = "canon")]
         canonicalize: bool,
 
+        /// A path for deduplication metadata.
+        /// The following columns are output: id, duplicate_id.
+        /// The file is output as a CSV or TSV depending on the file extension.
+        /// Note that if no sequences are output, the output table will be an empty file.
+        #[clap(long)]
+        table: Option<PathBuf>,
+
         /// The number of threads to use. If not specified, the number of logical cores is used.
         #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
         threads: u32,
