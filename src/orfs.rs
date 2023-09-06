@@ -110,7 +110,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     for orf in &orfs.0 {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
-                        writer.write_all(b" ORF").unwrap();
+                        writer.write_all(b"_ORF").unwrap();
                         writer.write_all(orf.start.to_string().as_bytes()).unwrap();
                         writer.write_all(b"\n").unwrap();
                         writer
@@ -125,7 +125,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                         if let Some(ref mut table_writer) = table_writer {
                             table_writer
                                 .serialize(Row {
-                                    orf_id: format!("{} ORF{}", head, orf.start),
+                                    orf_id: format!("{}_ORF{}", head, orf.start),
                                     seq_id: head.to_string(),
                                     start: orf.start,
                                     stop: orf.stop,
@@ -143,9 +143,9 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     for orf in &orfs.1 {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
-                        writer.write_all(b" ORF").unwrap();
+                        writer.write_all(b"_RC_ORF").unwrap();
                         writer.write_all(orf.start.to_string().as_bytes()).unwrap();
-                        writer.write_all(b" RC\n").unwrap();
+                        writer.write_all(b"\n").unwrap();
                         writer
                             .write_all(orf.seq_with_opts(&orfs.2, *include_stop).as_bytes())
                             .unwrap();
@@ -155,7 +155,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                         if let Some(ref mut table_writer) = table_writer {
                             table_writer
                                 .serialize(Row {
-                                    orf_id: format!("{} ORF{} RC", head, orf.start),
+                                    orf_id: format!("{}_RC_ORF{}", head, orf.start),
                                     seq_id: head.to_string(),
                                     start: &orfs.2.len() - 1 - orf.start, // reverse complement coordinates back to forward strand
                                     stop: match orf.stop {
