@@ -4,7 +4,7 @@ use crate::{
 };
 use nohash_hasher::BuildNoHashHasher;
 use seq_io::{fasta::Record, parallel::parallel_fasta};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(serde::Serialize)]
 struct Row<'a> {
@@ -44,29 +44,32 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
 
                     let canonicalized_hash = xxhash_rust::xxh3::xxh3_64(canonicalized);
 
-                    if !seen.contains_key(&canonicalized_hash) {
-                        seen.insert(canonicalized_hash, record.id().unwrap().to_owned());
+                    match seen.entry(canonicalized_hash) {
+                        Entry::Vacant(entry) => {
+                            entry.insert(record.id().unwrap().to_owned());
 
-                        writer.write_all(b">").unwrap();
-                        writer.write_all(record.head()).unwrap();
-                        writer.write_all(b"\n").unwrap();
-                        match canonicalize {
-                            true => {
-                                writer.write_all(canonicalized).unwrap();
+                            writer.write_all(b">").unwrap();
+                            writer.write_all(record.head()).unwrap();
+                            writer.write_all(b"\n").unwrap();
+                            match canonicalize {
+                                true => {
+                                    writer.write_all(canonicalized).unwrap();
+                                }
+                                false => {
+                                    writer.write_all(record.seq()).unwrap();
+                                }
+                            };
+                            writer.write_all(b"\n").unwrap();
+                        }
+                        Entry::Occupied(entry) => {
+                            if let Some(ref mut table_writer) = table_writer {
+                                table_writer
+                                    .serialize(Row {
+                                        id: entry.get(),
+                                        duplicate_id: record.id().unwrap(),
+                                    })
+                                    .expect("failed to serialize table row");
                             }
-                            false => {
-                                writer.write_all(record.seq()).unwrap();
-                            }
-                        };
-                        writer.write_all(b"\n").unwrap();
-                    } else {
-                        if let Some(ref mut table_writer) = table_writer {
-                            table_writer
-                                .serialize(Row {
-                                    id: seen.get(&canonicalized_hash).unwrap(),
-                                    duplicate_id: record.id().unwrap(),
-                                })
-                                .expect("failed to serialize table row");
                         }
                     }
 

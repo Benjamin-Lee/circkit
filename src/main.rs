@@ -11,7 +11,11 @@ use clap::Parser;
 use human_panic::setup_panic;
 
 fn main() -> anyhow::Result<()> {
-    setup_panic!();
+    // The current human-panic macro uses the deprecated PanicInfo alias.
+    #[allow(deprecated)]
+    {
+        setup_panic!();
+    }
 
     let cli = Cli::parse();
 
