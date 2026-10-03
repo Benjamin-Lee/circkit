@@ -71,10 +71,15 @@ def machine():
     cpu = platform.processor()
     features = None
     if sys.platform == "darwin":
-        cpu = command(["sysctl", "-n", "machdep.cpu.brand_string"])
+        try:
+            cpu = command(["sysctl", "-n", "machdep.cpu.brand_string"])
+        except subprocess.CalledProcessError:
+            cpu = command(["sysctl", "-n", "hw.model"])
     elif sys.platform.startswith("linux"):
         lines = (optional_text("/proc/cpuinfo") or "").splitlines()
         cpu = next((s.split(":", 1)[1].strip() for s in lines if s.startswith("model name")), cpu)
+        if not cpu:
+            cpu = "; ".join(s.strip() for s in lines if s.startswith(("CPU implementer", "CPU part")))
         features = next((s.split(":", 1)[1].split() for s in lines
                          if s.startswith(("flags", "Features"))), None)
     affinity = sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None
@@ -117,7 +122,8 @@ def dependency_versions(lock):
 
 def build(args, output, files):
     baseline = command(["git", "rev-parse", args.baseline + "^{commit}"])
-    rustc = str(Path(args.cargo).with_name("rustc")) if Path(args.cargo).is_file() else "rustc"
+    rustc = os.environ.get("RUSTC") or (str(Path(args.cargo).with_name("rustc"))
+                                      if Path(args.cargo).is_file() else "rustc")
     compiler = command([rustc, "-vV"])
     host = next(s.split(": ", 1)[1] for s in compiler.splitlines() if s.startswith("host:"))
     target = os.environ.get("CARGO_BUILD_TARGET")
@@ -129,8 +135,10 @@ def build(args, output, files):
         "cargo": command([args.cargo, "--version"]),
         "build_environment": {key: os.environ.get(key) for key in (
             "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET",
+            "RUSTC", "RUSTC_WRAPPER", "RUSTUP_TOOLCHAIN", "CARGO_BUILD_RUSTFLAGS",
             "CARGO_PROFILE_RELEASE_LTO", "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
-            "CARGO_PROFILE_RELEASE_OPT_LEVEL", "CARGO_PROFILE_RELEASE_DEBUG")},
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL", "CARGO_PROFILE_RELEASE_DEBUG")
+            + tuple(k for k in os.environ if k.startswith("CARGO_TARGET_") and k.endswith("_RUSTFLAGS"))},
         "scalar_variant": not args.no_scalar,
     }
     info_path = output / "builds.json"
@@ -158,7 +166,10 @@ def build(args, output, files):
             destination = (baseline_source / member.name).resolve()
             if baseline_source.resolve() not in destination.parents or not (member.isfile() or member.isdir()):
                 raise ValueError("Unsupported archive member: " + member.name)
-        source.extractall(baseline_source)
+        if sys.version_info >= (3, 12):
+            source.extractall(baseline_source, filter="data")
+        else:
+            source.extractall(baseline_source)
     for name in files:
         destination = candidate_source / name
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +184,7 @@ def build(args, output, files):
         driver.replace(adapter, '#[path = "../benchmarks/baseline.rs"]'))
     binary_dir = output / "binaries"
     binary_dir.mkdir(exist_ok=True)
-    info = {"signature": signature, "profile": {"release": True, "lto": "fat", "codegen_units": 1},
+    info = {"signature": signature, "default_profile": {"release": True, "lto": "fat", "codegen_units": 1},
             "candidate_dirty": command(["git", "status", "--porcelain"]),
             "instrumentation": "Identical driver; baseline adapter uses only the PR #2 public API",
             "stages": {}}
@@ -184,7 +195,7 @@ def build(args, output, files):
         # Cargo keeps separate baseline/candidate targets; scalar shares candidate dependencies.
         target_dir = output / "build" / ("target-baseline" if stage == "baseline" else "target-optimized")
         env = dict(os.environ, CARGO_TARGET_DIR=str(target_dir))
-        build_command = [args.cargo, "build", "--locked", "--release", "--bin", "circkit",
+        build_command = [args.cargo, "build", "--verbose", "--locked", "--release", "--bin", "circkit",
                          "--example", "performance", "--jobs", str(args.build_jobs)] + features
         if args.offline:
             build_command.append("--offline")
@@ -341,6 +352,7 @@ class Runner:
             common = ["--min-length", "0", "--include-stop"]
         if "sensitive" in name:
             common += ["--sensitive"]
+        settings["common_args"] = common
         def cmd(stage, output):
             args = [str(self.output / "binaries" / stage), operation, str(dataset),
                     "--threads", str(threads), "-o", str(output)] + common
@@ -442,6 +454,10 @@ def main():
     files = source_files()
     environment = {"schema_version": 1, "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    "machine": machine(), "settings": vars(args).copy(), "seed": SEED,
+                   "candidate_defaults": {"rotation_cutoff": DEFAULT_CUTOFF,
+                                          "mismatch_chunk_size": DEFAULT_CHUNK,
+                                          "execution": "auto", "queue_depth": "64; orfs max(2, 2*threads)",
+                                          "gzip_level": 6},
                    "method": {"cli": "Wall time including startup, parsing and writing; warm caches",
                               "library": "Time per call excluding fixture setup, checksum and startup",
                               "validation": "FASTA record multiset including headers, plus metadata row multiset",
