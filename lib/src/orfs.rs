@@ -167,6 +167,8 @@ pub fn find_orfs_with_indices(
 
         // Find the next stop codon in the current frame
         // The normal case has the sequence being a multiple of 3, so any wrap around is in the same frame
+        // Keep compatibility with Rust versions before usize::is_multiple_of.
+        #[allow(clippy::manual_is_multiple_of)]
         if seq_len % 3 == 0 {
             // Find greater than or equal to the start codon index
             let stop_codon_index = stop_codon_indices_by_frame[current_frame]
