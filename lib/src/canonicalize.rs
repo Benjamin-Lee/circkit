@@ -1,8 +1,20 @@
 use bio::alphabets;
 
-/// Compute the lexicographically minimal string rotation of a string.
+/// Return the zero-based byte offset of the lexicographically minimal circular rotation.
+///
+/// Bytes are compared directly, without normalizing the alphabet or changing strands.
+/// Empty input returns zero. If multiple offsets produce the same minimum rotation,
+/// the smallest offset is returned.
+///
+/// Uses Duval's Lyndon factorization algorithm in linear time.
 /// https://cp-algorithms.com/string/lyndon_factorization.html#finding-the-smallest-cyclic-shift
-fn lmsr(s: &[u8]) -> Vec<u8> {
+///
+/// ```
+/// use circkit::canonicalize::lmsr_index;
+///
+/// assert_eq!(lmsr_index(b"TAA"), 1);
+/// ```
+pub fn lmsr_index(s: &[u8]) -> usize {
     let n = s.len();
     let doubled: Vec<u8> = s.iter().chain(s.iter()).copied().collect();
     let mut i = 0;
@@ -24,9 +36,26 @@ fn lmsr(s: &[u8]) -> Vec<u8> {
             i += j - k;
         }
     }
-    doubled[ans..ans + n].to_vec()
+    ans
 }
 
+/// Return the lexicographically minimal circular rotation, preserving the supplied strand.
+///
+/// The rotation starts at the offset returned by [`lmsr_index`]. Empty input returns
+/// an empty vector. Bytes are compared directly, without alphabet normalization.
+///
+/// ```
+/// use circkit::canonicalize::lmsr;
+///
+/// assert_eq!(lmsr(b"TAA"), b"AAT");
+/// ```
+pub fn lmsr(s: &[u8]) -> Vec<u8> {
+    let index = lmsr_index(s);
+    let mut rotated = Vec::with_capacity(s.len());
+    rotated.extend_from_slice(&s[index..]);
+    rotated.extend_from_slice(&s[..index]);
+    rotated
+}
 
 /// Canonicalize a circular DNA sequence.
 ///
