@@ -44,6 +44,18 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(metadata["cpu"], "Apple M2")
         self.assertIsNone(metadata["cgroup_cpu_max"])
 
+    def test_failed_rerun_cannot_leave_a_stale_success_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.zip"
+            report.write_bytes(b"previous successful report")
+            with patch.object(runner.sys, "argv", ["run.py", "--output", directory]), \
+                 patch.object(runner, "source_files", return_value=[]), \
+                 patch.object(runner, "machine", return_value={}), \
+                 patch.object(runner, "build", side_effect=ValueError("changed baseline")):
+                with self.assertRaisesRegex(ValueError, "changed baseline"):
+                    runner.main()
+            self.assertFalse(report.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

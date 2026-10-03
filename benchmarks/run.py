@@ -451,8 +451,13 @@ def main():
             parser.error("--cpus is unavailable on this OS; omit it to use the OS scheduler")
         os.sched_setaffinity(0, args.cpus)
     args.output.mkdir(parents=True, exist_ok=True)
+    # Reusing a build directory must never leave a previous run's report behind
+    # if the new build, validation, or timing fails.
+    for name in ("report.zip", "results.csv", "results.json", "raw.json", "validation.json", "inputs.json"):
+        (args.output / name).unlink(missing_ok=True)
     files = source_files()
-    environment = {"schema_version": 1, "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    environment = {"schema_version": 1, "status": "building",
+                   "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    "machine": machine(), "settings": vars(args).copy(), "seed": SEED,
                    "candidate_defaults": {"rotation_cutoff": DEFAULT_CUTOFF,
                                           "mismatch_chunk_size": DEFAULT_CHUNK,
@@ -468,6 +473,8 @@ def main():
                                for k, v in environment["settings"].items()}
     write_json(args.output / "environment.json", environment)
     build(args, args.output, files)
+    environment["status"] = "running"
+    write_json(args.output / "environment.json", environment)
     paths = fixtures(args.output, args.suite)
     for index, path in enumerate(args.input):
         paths["custom-" + str(index)] = path.expanduser().resolve()
@@ -481,6 +488,7 @@ def main():
                          "length_mean": statistics.mean(lengths) if lengths else 0})
     write_json(args.output / "inputs.json", manifest)
     runner = Runner(args, args.output)
+    runner.save()
     for op, dataset, suffix in [
         ("canonicalize", "short", ""), ("canonicalize", "long", ""), ("canonicalize", "medium", ""),
         ("uniq", "short", ""), ("monomerize", "short", ""), ("monomerize", "dimers", ""),
@@ -523,6 +531,7 @@ def main():
             runner.cli("orfs-queue-" + str(depth), "orfs", paths["medium"], queue_threads,
                        ["--execution", "pipeline", "--queue-depth", str(depth)])
     environment["completed_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    environment["status"] = "completed"
     write_json(args.output / "environment.json", environment)
     report_files = ["environment.json", "builds.json", "inputs.json", "results.csv",
                     "results.json", "raw.json", "validation.json"]
