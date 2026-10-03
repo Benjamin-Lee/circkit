@@ -76,7 +76,9 @@ Here's how it's going:
 
 ## Benchmarks
 
-To be done.
+See [the performance guide](benchmarks/README.md) for portable benchmarks,
+machine-readable results, and tuning controls. The runner compares the merged
+PR #2 baseline with the current checkout on the same machine.
 
 ## See Also
 

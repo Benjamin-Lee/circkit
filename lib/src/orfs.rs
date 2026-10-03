@@ -17,40 +17,155 @@ pub struct Orf {
 // this function converts an Orf into a string with the ORF sequence
 impl Orf {
     pub fn seq_with_opts(&self, seq: &[u8], include_stop: bool) -> String {
-        // use a cyclical iterator to get the nucleotides, starting at the start codon
-        let nucleotides = seq
-            .iter()
-            .cycle()
-            .skip(self.start)
-            .take(
-                self.length
-                    - match include_stop {
-                        true => 0,
-                        false => 3,
-                    },
-            )
-            .copied()
-            .collect::<Vec<_>>();
+        let length = self.length - if include_stop { 0 } else { 3 };
+        let mut nucleotides = Vec::with_capacity(length);
+        self.write_sequence(seq, length, &mut nucleotides).unwrap();
         String::from_utf8(nucleotides).unwrap()
     }
     pub fn seq(&self, seq: &[u8]) -> String {
         self.seq_with_opts(seq, true)
     }
+
+    /// Write circular sequence chunks directly, without materializing an ORF string.
+    pub fn write_seq_with_opts<W: std::io::Write + ?Sized>(
+        &self,
+        seq: &[u8],
+        include_stop: bool,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
+        self.write_sequence(seq, self.length - if include_stop { 0 } else { 3 }, writer)
+    }
+
+    fn write_sequence<W: std::io::Write + ?Sized>(
+        &self,
+        seq: &[u8],
+        mut remaining: usize,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
+        if seq.is_empty() {
+            return Ok(());
+        }
+        let mut offset = self.start % seq.len();
+        while remaining > 0 {
+            let count = remaining.min(seq.len() - offset);
+            writer.write_all(&seq[offset..offset + count])?;
+            remaining -= count;
+            offset = 0;
+        }
+        Ok(())
+    }
 }
 
 pub fn find_orfs(seq: &str) -> Vec<Orf> {
-    // Step 1: Find all stop and start codons by frame
-    let start_codons = ["ATG"];
-    let stop_codons = ["TAA", "TAG", "TGA"];
-    let patterns = start_codons
-        .iter()
-        .chain(stop_codons.iter())
-        .map(|s| s.as_bytes())
-        .collect::<Vec<_>>();
-    let ac = AhoCorasick::new(patterns).unwrap();
-    let (starts, stops) =
-        start_stop_codon_indices_by_frame_aho_corasick(seq, &start_codons, &stop_codons, &ac);
+    let (starts, stops) = CodonMatcher::default().indices(seq.as_bytes());
     find_orfs_with_indices(seq.len(), starts, stops)
+}
+
+/// Reusable exact codon lookup. The common A/C/G/T alphabet uses a 64-entry table.
+pub struct CodonMatcher {
+    table: [u8; 64],
+    fallback: Option<CodonSets>,
+}
+
+struct CodonSets {
+    starts: Vec<Vec<u8>>,
+    stops: Vec<Vec<u8>>,
+}
+
+impl Default for CodonMatcher {
+    fn default() -> Self {
+        let mut table = [0; 64];
+        table[14] = 1; // ATG
+        table[48] = 2; // TAA
+        table[50] = 2; // TAG
+        table[56] = 2; // TGA
+        Self {
+            table,
+            fallback: None,
+        }
+    }
+}
+
+impl CodonMatcher {
+    pub fn new(starts: &[&str], stops: &[&str]) -> Self {
+        let mut matcher = Self {
+            table: [0; 64],
+            fallback: None,
+        };
+        for (codons, kind) in [(starts, 1), (stops, 2)] {
+            for codon in codons {
+                if let Some(index) = Self::code(codon.as_bytes()) {
+                    matcher.table[index] |= kind;
+                } else {
+                    matcher.fallback = Some(CodonSets {
+                        starts: starts.iter().map(|s| s.as_bytes().to_vec()).collect(),
+                        stops: stops.iter().map(|s| s.as_bytes().to_vec()).collect(),
+                    });
+                    return matcher;
+                }
+            }
+        }
+        matcher
+    }
+
+    #[inline]
+    fn code(codon: &[u8]) -> Option<usize> {
+        fn base(b: u8) -> Option<usize> {
+            match b {
+                b'A' => Some(0),
+                b'C' => Some(1),
+                b'G' => Some(2),
+                b'T' => Some(3),
+                _ => None,
+            }
+        }
+        if codon.len() != 3 {
+            return None;
+        }
+        Some((base(codon[0])? << 4) | (base(codon[1])? << 2) | base(codon[2])?)
+    }
+
+    #[inline]
+    fn kind(&self, codon: &[u8]) -> u8 {
+        if let Some(codons) = &self.fallback {
+            u8::from(codons.starts.iter().any(|s| s == codon))
+                | (u8::from(codons.stops.iter().any(|s| s == codon)) << 1)
+        } else {
+            Self::code(codon)
+                .map(|index| self.table[index])
+                .unwrap_or(0)
+        }
+    }
+
+    pub fn indices(&self, seq: &[u8]) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
+        let mut starts = vec![Vec::new(), Vec::new(), Vec::new()];
+        let mut stops = vec![Vec::new(), Vec::new(), Vec::new()];
+        if seq.len() < 3 {
+            return (starts, stops);
+        }
+        for (index, codon) in seq.windows(3).enumerate() {
+            let kind = self.kind(codon);
+            if kind & 1 != 0 {
+                starts[index % 3].push(index);
+            } else if kind & 2 != 0 {
+                stops[index % 3].push(index);
+            }
+        }
+        let n = seq.len();
+        for (index, codon) in [
+            (n - 2, [seq[n - 2], seq[n - 1], seq[0]]),
+            (n - 1, [seq[n - 1], seq[0], seq[1]]),
+        ] {
+            let kind = self.kind(&codon);
+            if kind & 1 != 0 {
+                starts[index % 3].push(index);
+            }
+            if kind & 2 != 0 {
+                stops[index % 3].push(index);
+            }
+        }
+        (starts, stops)
+    }
 }
 
 /// A helper function to add the last two codons to a computed codon index
@@ -158,7 +273,38 @@ pub fn find_orfs_with_indices(
     stop_codon_indices_by_frame: Vec<Vec<usize>>,
 ) -> Vec<Orf> {
     // Find the longest ORF for each start codon
-    let mut orfs = Vec::new();
+    let mut orfs = Vec::with_capacity(start_codon_indices_by_frame.iter().map(Vec::len).sum());
+    let sorted: Vec<bool> = stop_codon_indices_by_frame
+        .iter()
+        .map(|stops| stops.windows(2).all(|pair| pair[0] <= pair[1]))
+        .collect();
+    let mut cursors = [0; 3];
+    let mut previous = [None; 3];
+    let mut next_stop = |frame: usize, start: usize, strict: bool| {
+        let stops = &stop_codon_indices_by_frame[frame];
+        if !sorted[frame] {
+            return stops
+                .iter()
+                .copied()
+                .find(|&stop| if strict { stop > start } else { stop >= start });
+        }
+        if previous[frame].is_some_and(|last| start < last) {
+            cursors[frame] =
+                stops.partition_point(|&stop| if strict { stop <= start } else { stop < start });
+        } else {
+            while cursors[frame] < stops.len()
+                && (if strict {
+                    stops[cursors[frame]] <= start
+                } else {
+                    stops[cursors[frame]] < start
+                })
+            {
+                cursors[frame] += 1;
+            }
+        }
+        previous[frame] = Some(start);
+        stops.get(cursors[frame]).copied()
+    };
 
     for &start_codon_index in start_codon_indices_by_frame.iter().flatten() {
         let current_frame = start_codon_index % 3;
@@ -171,15 +317,14 @@ pub fn find_orfs_with_indices(
         #[allow(clippy::manual_is_multiple_of)]
         if seq_len % 3 == 0 {
             // Find greater than or equal to the start codon index
-            let stop_codon_index = stop_codon_indices_by_frame[current_frame]
-                .iter()
-                .copied()
-                .find(|&i| i > start_codon_index)
-                .or_else(|| {
-                    stop_codon_indices_by_frame[current_frame]
-                        .iter()
-                        .copied()
-                        .find(|&i| i < start_codon_index)
+            let stop_codon_index =
+                next_stop(current_frame, start_codon_index, true).or_else(|| {
+                    let stops = &stop_codon_indices_by_frame[current_frame];
+                    if sorted[current_frame] {
+                        stops.first().copied().filter(|&i| i < start_codon_index)
+                    } else {
+                        stops.iter().copied().find(|&i| i < start_codon_index)
+                    }
                 });
 
             orfs.push(Orf {
@@ -207,10 +352,7 @@ pub fn find_orfs_with_indices(
 
         // The sequence is not a multiple of 3, so we need to check the other frames
         // Find the next stop codon in the current frame
-        let stop_codon_index = stop_codon_indices_by_frame[current_frame]
-            .iter()
-            .copied()
-            .find(|&i| i >= start_codon_index);
+        let stop_codon_index = next_stop(current_frame, start_codon_index, false);
 
         // Easy case: There is a stop codon in the current frame later in the sequence
         if let Some(stop) = stop_codon_index {
@@ -308,8 +450,7 @@ pub fn longest_orfs(orfs: &mut Vec<Orf>) -> Vec<Orf> {
     let mut longest_orfs = Vec::new();
     let mut seen_stop_codons = HashSet::new(); // TODO: check performance of HashSet vs. Vec vs alternative hasher
     for orf in orfs {
-        if !seen_stop_codons.contains(&orf.stop) {
-            seen_stop_codons.insert(orf.stop);
+        if seen_stop_codons.insert(orf.stop) {
             longest_orfs.push(*orf);
         }
     }
@@ -579,7 +720,7 @@ mod test {
             #[test]
             fn test_bio_orfs(seq in "[ATGC]{3,300}") {
                 let finder = Finder::new(vec![b"ATG"], vec![b"TAA", b"TAG", b"TGA"], 0);
-                let bio_orfs: Vec<bio::seq_analysis::orf::Orf> = finder.find_all(seq.as_bytes()).into_iter().collect::<Vec<_>>();
+                let bio_orfs: Vec<bio::seq_analysis::orf::Orf> = finder.find_all(seq.as_bytes()).collect::<Vec<_>>();
                 let circkit_orfs: Vec<Orf> = find_orfs(&seq);
 
                 // for each bio orf, make sure there is a circkit orf that is the same
@@ -592,7 +733,7 @@ mod test {
                     prop_assert!(circkit_orf.is_some(), "Circkit ORF: {:?} not found in bio orf: {:?}", circkit_orf, bio_orf);
 
                     // We know that Rust-Bio doesn't work on wrapped ORFs, so any one that matches should not be wrapped
-                    prop_assert_eq!(circkit_orf.unwrap().wraps, 0, "Circkit ORF: {:?} ({:?}) should not be a wrapped ORF", circkit_orf, circkit_orf.unwrap().seq(&seq.as_bytes()));
+                    prop_assert_eq!(circkit_orf.unwrap().wraps, 0, "Circkit ORF: {:?} ({:?}) should not be a wrapped ORF", circkit_orf, circkit_orf.unwrap().seq(seq.as_bytes()));
 
                     if circkit_orf.is_some() {
                         prop_assert_eq!((circkit_orf.unwrap().start % 3) as i8, bio_orf.offset, "Circkit {:?} not in same offset as Bio {:?}", circkit_orf, bio_orf);
@@ -620,7 +761,7 @@ mod test {
                 // Quadruple the sequence and make sure that the ORFs are the same
                 let dup_seq = format!("{}{}{}{}", seq, seq, seq, seq);
                 let finder = Finder::new(vec![b"ATG"], vec![b"TAA", b"TAG", b"TGA"], 0);
-                let bio_orfs: Vec<bio::seq_analysis::orf::Orf> = finder.find_all(dup_seq.as_bytes()).into_iter().collect::<Vec<_>>();
+                let bio_orfs: Vec<bio::seq_analysis::orf::Orf> = finder.find_all(dup_seq.as_bytes()).collect::<Vec<_>>();
                 let circkit_orfs: Vec<Orf> = find_orfs(&seq);
 
                 // for each bio orf, make sure there is a circkit orf that is the same
@@ -656,7 +797,7 @@ mod test {
                 let mut orfs = find_orfs(&seq);
                 let longest_orfs = longest_orfs(&mut orfs);
                 for orf in &longest_orfs {
-                    prop_assert!(orfs.contains(&orf), "Longest ORF: {:?} is not in all ORFs: {:?}", orf, orfs);
+                    prop_assert!(orfs.contains(orf), "Longest ORF: {:?} is not in all ORFs: {:?}", orf, orfs);
                 }
                 prop_assert!(longest_orfs.len() <= orfs.len(), "Longest ORFs: {:?} is not a subset of all ORFs: {:?}", longest_orfs, orfs);
             }
@@ -665,7 +806,7 @@ mod test {
             fn indexing_is_identical(seq in "[ATGC]{3,300}"){
                 let start_codons = ["ATG"];
                 let stop_codons = ["TAA", "TAG", "TGA"];
-                let ac = aho_corasick::AhoCorasick::new(&["ATG", "TAA", "TAG", "TGA"]).unwrap();
+                let ac = aho_corasick::AhoCorasick::new(["ATG", "TAA", "TAG", "TGA"]).unwrap();
                 prop_assert_eq!(start_stop_codon_indices_by_frame_naive(&seq, &start_codons, &stop_codons), start_stop_codon_indices_by_frame_iter(&seq, &start_codons, &stop_codons));
                 prop_assert_eq!(start_stop_codon_indices_by_frame_naive(&seq, &start_codons, &stop_codons), start_stop_codon_indices_by_frame_aho_corasick(&seq, &start_codons, &stop_codons, &ac));
             }

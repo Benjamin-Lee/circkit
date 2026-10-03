@@ -1,0 +1,41 @@
+name: Performance portability
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  native-arm:
+    name: Native ARM (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm native ARM and install stable Rust
+        run: |
+          case "$(uname -m)" in arm64|aarch64) ;; *) exit 1 ;; esac
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+          rustc -vV
+      - name: Check formatting and lints
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Verify default and scalar normalization
+        run: |
+          cargo test --workspace --locked
+          cargo test --locked --features scalar-normalization --test performance_normalize
+      - name: Test portable benchmark reports
+        run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
+      - name: Smoke-test native benchmarking
+        run: python3 benchmarks/run.py --suite smoke --trials 2 --warmups 0 --threads 1 --no-tuning --no-scalar --output target/benchmark-smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-${{ matrix.os }}
+          path: |
+            target/benchmark-smoke/report.zip
+            target/benchmark-smoke/build-*.log

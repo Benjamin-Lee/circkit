@@ -9,7 +9,7 @@ edition = "2021"
 bio = "*"
 log = "0.4.17"
 derive_builder = "0.11.2"
-memchr = "2.5.0"
+memchr = "2.8.3"
 aho-corasick = "1.0.1"
 
 [dev-dependencies]

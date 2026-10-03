@@ -1,13 +1,30 @@
 use bio::alphabets;
 
+/// Performance choices that do not change the rotation or its tie-breaking.
+#[derive(Clone, Copy, Debug)]
+pub struct RotationOptions {
+    /// Use contiguous Duval through this length, and a constant-space search above it.
+    /// The default (32,768 bytes) is empirical. Zero selects constant-space search
+    /// for every nonempty input; `usize::MAX` selects Duval for every input.
+    pub duval_max_len: usize,
+}
+
+impl Default for RotationOptions {
+    fn default() -> Self {
+        Self {
+            duval_max_len: 32768,
+        }
+    }
+}
+
 /// Return the zero-based byte offset of the lexicographically minimal circular rotation.
 ///
 /// Bytes are compared directly, without normalizing the alphabet or changing strands.
 /// Empty input returns zero. If multiple offsets produce the same minimum rotation,
 /// the smallest offset is returned.
 ///
-/// Uses Duval's Lyndon factorization algorithm in linear time.
-/// https://cp-algorithms.com/string/lyndon_factorization.html#finding-the-smallest-cyclic-shift
+/// Uses linear-time searches: contiguous Duval factorization for short inputs,
+/// and a two-candidate search with constant auxiliary space for longer inputs.
 ///
 /// ```
 /// use circkit::canonicalize::lmsr_index;
@@ -15,14 +32,16 @@ use bio::alphabets;
 /// assert_eq!(lmsr_index(b"TAA"), 1);
 /// ```
 pub fn lmsr_index(s: &[u8]) -> usize {
+    RotationOptions::default().lmsr_index(s)
+}
+
+fn duval_allocating_index(s: &[u8]) -> usize {
     let n = s.len();
     let doubled: Vec<u8> = s.iter().chain(s.iter()).copied().collect();
-    let mut i = 0;
-    let mut ans = 0;
+    let (mut i, mut answer) = (0, 0);
     while i < n {
-        ans = i;
-        let mut j = i + 1;
-        let mut k = i;
+        answer = i;
+        let (mut j, mut k) = (i + 1, i);
         while j < 2 * n && doubled[k] <= doubled[j] {
             if doubled[k] < doubled[j] {
                 k = i;
@@ -31,12 +50,69 @@ pub fn lmsr_index(s: &[u8]) -> usize {
             }
             j += 1;
         }
-
         while i <= k {
             i += j - k;
         }
     }
-    ans
+    answer
+}
+
+fn duval_index(s: &[u8], doubled: &mut Vec<u8>) -> usize {
+    let n = s.len();
+    doubled.clear();
+    doubled.reserve(2 * n);
+    doubled.extend_from_slice(s);
+    doubled.extend_from_slice(s);
+    let (mut i, mut answer) = (0, 0);
+    while i < n {
+        answer = i;
+        let (mut j, mut k) = (i + 1, i);
+        while j < 2 * n && doubled[k] <= doubled[j] {
+            if doubled[k] < doubled[j] {
+                k = i;
+            } else {
+                k += 1;
+            }
+            j += 1;
+        }
+        while i <= k {
+            i += j - k;
+        }
+    }
+    answer
+}
+
+fn two_candidate_index(s: &[u8]) -> usize {
+    let n = s.len();
+    if n < 2 {
+        return 0;
+    }
+    let (mut i, mut j, mut matched) = (0, 1, 0);
+    while i < n && j < n && matched < n {
+        let left = i + matched;
+        let right = j + matched;
+        let a = s[if left >= n { left - n } else { left }];
+        let b = s[if right >= n { right - n } else { right }];
+        match a.cmp(&b) {
+            std::cmp::Ordering::Equal => matched += 1,
+            std::cmp::Ordering::Greater => {
+                // Every candidate in i..=i+matched loses to j at the mismatch.
+                i += matched + 1;
+                if i <= j {
+                    i = j + 1;
+                }
+                matched = 0;
+            }
+            std::cmp::Ordering::Less => {
+                j += matched + 1;
+                if j <= i {
+                    j = i + 1;
+                }
+                matched = 0;
+            }
+        }
+    }
+    i.min(j)
 }
 
 /// Return the lexicographically minimal circular rotation, preserving the supplied strand.
@@ -50,11 +126,7 @@ pub fn lmsr_index(s: &[u8]) -> usize {
 /// assert_eq!(lmsr(b"TAA"), b"AAT");
 /// ```
 pub fn lmsr(s: &[u8]) -> Vec<u8> {
-    let index = lmsr_index(s);
-    let mut rotated = Vec::with_capacity(s.len());
-    rotated.extend_from_slice(&s[index..]);
-    rotated.extend_from_slice(&s[..index]);
-    rotated
+    RotationOptions::default().lmsr(s)
 }
 
 /// Canonicalize a circular DNA sequence.
@@ -64,14 +136,94 @@ pub fn lmsr(s: &[u8]) -> Vec<u8> {
 /// Ensure that the input is a valid DNA sequence before calling this function.
 /// Non-ATGC characters will be treated normally, meaning that they too will be used when sorting lexicographically.
 pub fn canonicalize(s: &[u8]) -> Vec<u8> {
-    let lmsr_s = lmsr(s);
-    let lmsr_revcomp_s = lmsr(&alphabets::dna::revcomp(&lmsr_s));
+    RotationOptions::default().canonicalize(s)
+}
 
-    if lmsr_s < lmsr_revcomp_s {
-        lmsr_s
-    } else {
-        lmsr_revcomp_s
+/// Canonicalize into reusable buffers, avoiding per-record allocations in pipelines.
+pub fn canonicalize_into(s: &[u8], output: &mut Vec<u8>, reverse: &mut Vec<u8>) {
+    RotationOptions::default().canonicalize_into(s, output, reverse);
+}
+
+impl RotationOptions {
+    /// Compute [`lmsr_index`] with a configurable algorithm cutoff.
+    pub fn lmsr_index(self, s: &[u8]) -> usize {
+        if s.len() <= self.duval_max_len {
+            duval_allocating_index(s)
+        } else {
+            two_candidate_index(s)
+        }
     }
+
+    /// Compute [`lmsr`] with a configurable algorithm cutoff.
+    pub fn lmsr(self, s: &[u8]) -> Vec<u8> {
+        let index = self.lmsr_index(s);
+        let mut rotated = Vec::with_capacity(s.len());
+        rotated.extend_from_slice(&s[index..]);
+        rotated.extend_from_slice(&s[..index]);
+        rotated
+    }
+
+    /// Compute [`canonicalize`] with a configurable algorithm cutoff.
+    pub fn canonicalize(self, s: &[u8]) -> Vec<u8> {
+        if s.len() <= self.duval_max_len {
+            let forward = self.lmsr(s);
+            let backward = self.lmsr(&alphabets::dna::revcomp(&forward));
+            return if forward < backward {
+                forward
+            } else {
+                backward
+            };
+        }
+        let mut output = Vec::with_capacity(s.len());
+        let mut reverse = Vec::with_capacity(s.len());
+        self.canonicalize_into(s, &mut output, &mut reverse);
+        output
+    }
+
+    /// Compute [`canonicalize_into`] with a configurable algorithm cutoff.
+    pub fn canonicalize_into(self, s: &[u8], output: &mut Vec<u8>, reverse: &mut Vec<u8>) {
+        reverse.clear();
+        reverse.extend(s.iter().rev().map(|&base| alphabets::dna::complement(base)));
+        // The output buffer doubles as scratch until the winning rotation is known.
+        let (forward_index, reverse_index) = if s.len() <= self.duval_max_len {
+            (duval_index(s, output), duval_index(reverse, output))
+        } else {
+            (two_candidate_index(s), two_candidate_index(reverse))
+        };
+        let (sequence, index) =
+            if compare_rotations(s, forward_index, reverse, reverse_index).is_lt() {
+                (s, forward_index)
+            } else {
+                (reverse.as_slice(), reverse_index)
+            };
+        output.clear();
+        output.extend_from_slice(&sequence[index..]);
+        output.extend_from_slice(&sequence[..index]);
+    }
+}
+
+#[inline]
+fn compare_rotations(a: &[u8], mut left: usize, b: &[u8], mut right: usize) -> std::cmp::Ordering {
+    let mut remaining = a.len();
+    while remaining > 0 {
+        // At most three contiguous comparisons cover two equal-length rotations.
+        // Slice comparison can use the platform's optimized byte comparison.
+        let length = remaining.min(a.len() - left).min(b.len() - right);
+        let order = a[left..left + length].cmp(&b[right..right + length]);
+        if !order.is_eq() {
+            return order;
+        }
+        remaining -= length;
+        left += length;
+        right += length;
+        if left == a.len() {
+            left = 0;
+        }
+        if right == b.len() {
+            right = 0;
+        }
+    }
+    std::cmp::Ordering::Equal
 }
 
 #[cfg(test)]
@@ -154,11 +306,11 @@ mod fuzzing {
     fn rotate(s: &str, n: usize) -> String {
         let s = s.chars().collect::<Vec<char>>();
         let mut res = String::new();
-        for i in n..s.len() {
-            res.push(s[i]);
+        for &character in &s[n..] {
+            res.push(character);
         }
-        for i in 0..n {
-            res.push(s[i]);
+        for &character in &s[..n] {
+            res.push(character);
         }
         res
     }
