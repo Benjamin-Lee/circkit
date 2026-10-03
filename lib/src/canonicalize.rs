@@ -1,50 +1,33 @@
 use bio::alphabets;
 
-/// compute index of the lexicographically minimal string rotation of a string.
-/// https://codeforces.com/blog/entry/90035#duval
-pub fn lmsr_index(x: &[u8]) -> usize {
-    let s = std::str::from_utf8(x).unwrap();
-    let n: isize = s.len().try_into().unwrap();
-    let mut res: isize = 0;
-    let mut l: isize = 0;
-
-    while l < n {
-        res = l;
-        let mut r: isize = l;
-        let mut p: isize = l + 1;
-
-        while r < n {
-            let c = if p < n {
-                s.chars().nth(p.try_into().unwrap()).unwrap()
+/// Compute the lexicographically minimal string rotation of a string.
+/// https://cp-algorithms.com/string/lyndon_factorization.html#finding-the-smallest-cyclic-shift
+fn lmsr(s: &[u8]) -> Vec<u8> {
+    let n = s.len();
+    let doubled: Vec<u8> = s.iter().chain(s.iter()).copied().collect();
+    let mut i = 0;
+    let mut ans = 0;
+    while i < n {
+        ans = i;
+        let mut j = i + 1;
+        let mut k = i;
+        while j < 2 * n && doubled[k] <= doubled[j] {
+            if doubled[k] < doubled[j] {
+                k = i;
             } else {
-                s.chars().nth((p - n).try_into().unwrap()).unwrap()
-            };
-            if s.chars().nth(r.try_into().unwrap()).unwrap() > c {
-                break;
+                k += 1;
             }
-            if s.chars().nth(r.try_into().unwrap()).unwrap() < c {
-                r = l - 1;
-            }
-            r += 1;
-            p += 1;
+            j += 1;
         }
 
-        l = std::cmp::max(r, l + p - r);
+        while i <= k {
+            i += j - k;
+        }
     }
-
-    res.try_into().unwrap()
+    doubled[ans..ans + n].to_vec()
 }
 
-/// Compute the lexicographically minimal string rotation of a string.
-///
-/// Internally, this function computes the index of the LMSR and then converts it to a `Vec<u8>`.
-pub fn lmsr(s: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::<u8>::with_capacity(s.len());
-    let i = lmsr_index(s);
-    buf.extend_from_slice(&s[i..]);
-    buf.extend_from_slice(&s[..i]);
-    buf
-}
+
 /// Canonicalize a circular DNA sequence.
 ///
 /// This function computes the lexicographically minimal string rotation of a string and its reverse complement, and returns the smaller of the two.
