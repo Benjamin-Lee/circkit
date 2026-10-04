@@ -190,7 +190,7 @@ pub enum Command {
         #[arg(long)]
         min_overlap: Option<usize>,
 
-        /// Minimum overlap relative to the input sequence, as a finite nonnegative ratio.
+        /// Minimum overlap relative to the monomer length, as a finite nonnegative ratio.
         /// A value of 1.0 means that the sequence must be a complete dimer.
         /// Can be used with --min-overlap for more stringent filtering.
         /// If --keep-all is used, sequences with too short of an overlap are still output but as the original sequence.

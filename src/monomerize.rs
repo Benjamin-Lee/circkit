@@ -120,7 +120,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     if let Some(min_overlap_percent) = *min_overlap_percent {
                         if let Some(monomer_length) = *idx {
                             // full_length - monomer_length is the length of the overlapping region
-                            // a complete monomer would have an overlap ratio of 1.0
+                            // a complete dimer has an overlap ratio of 1.0
                             if (full_length - monomer_length) as f64 / (monomer_length as f64)
                                 < min_overlap_percent
                             {

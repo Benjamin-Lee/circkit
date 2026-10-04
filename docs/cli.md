@@ -123,6 +123,9 @@ counts range from 0 to 3. Codon lists accept comma-separated DNA triplets using
 A/C/G/T/N, normalize case and surrounding spaces, and reject malformed entries.
 N matches a literal N, not a wildcard.
 
+`--min-overlap-ratio` (also spelled `--min-overlap-percent`) means overlap length
+divided by monomer length: 1.0 requires a complete dimer and 2.0 a complete trimer.
+
 `orfs --strand reverse` searches and outputs only reverse-strand ORFs; earlier
 versions also included forward-strand ORFs in that mode. Default `both` behavior
 and the ORF matching algorithms are unchanged.
