@@ -7,33 +7,52 @@ circKit is a library for manipulating circular biological sequences such as DNA 
 - Easy to install
 - Written in Rust for performance and safety
 - Inputs and outputs can be gzip, bzip2, xz, or zstd compressed
+- Streaming FASTA with CSV, TSV, or JSONL metadata
+- Shell completions, JSON command discovery, and structured errors for automation
 
 ## Usage
 
+Building the CLI requires Rust 1.85 or newer:
+
+```sh
+cargo build --release --locked
+./target/release/circkit --help
+```
+
+See the [CLI guide](docs/cli.md) for streaming, metadata, shell completions,
+and automation examples. Run `circkit COMMAND --help` for each command's options.
+
 ```text
 $ circkit --help
-circkit 0.1.0
-Benjamin D. Lee <benjamin.lee@chch.ox.ac.uk>
 A toolkit for working with circular sequences.
 
-USAGE:
-    circkit [OPTIONS] <SUBCOMMAND>
+Usage: circkit [OPTIONS] <COMMAND>
 
-OPTIONS:
-    -h, --help       Print help information
-    -q, --quiet      Less output per occurrence
-    -v, --verbose    More output per occurrence
-    -V, --version    Print version information
+Commands:
+  monomerize    Find monomers of (potentially) circular or multimeric sequences
+  cat           Concatenate sequences to themselves
+  decat         Deconcatenate sequences to themselves
+  canonicalize  Select a consistent rotation and strand for circular sequences [alias: canon]
+  uniq          Deduplicate circular sequences
+  rotate        Rotate circular sequences to the left or right
+  orfs          Find ORFs in circular sequences
+  schema        Print a versioned JSON command catalog for automation and agents [alias: describe]
+  completions   Generate shell completion scripts on stdout
+  help          Print this message or the help of the given subcommand(s)
 
-SUBCOMMANDS:
-    canonicalize    Normalize circular sequences
-    cat             Concatenate sequences to themselves
-    decat           Deconcatenate sequences to themselves
-    help            Print this message or the help of the given subcommand(s)
-    monomerize      Find monomers of (potentially) circular or multimeric sequences
-    orfs            Find ORFs in circular sequences
-    rotate          Rotate circular sequences to the left or right
-    uniq            Deduplicate circular sequences
+Options:
+  -v, --verbose...                   Increase logging verbosity
+  -q, --quiet...                     Decrease logging verbosity
+      --error-format <ERROR_FORMAT>  Diagnostic format on stderr; FASTA output is unaffected [default: text] [possible values: text, json]
+  -h, --help                         Print help
+  -V, --version                      Print version
+
+Examples:
+  circkit canonicalize reads.fasta -o canonical.fasta
+  circkit monomerize - --keep-all --threads 1
+  circkit schema orfs
+
+Use '-' for stdin/stdout. Run 'circkit COMMAND --help' for options.
 ```
 
 ## Subcommands

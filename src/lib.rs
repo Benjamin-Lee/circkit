@@ -1,6 +1,9 @@
 pub mod canonicalize;
 pub mod commands;
 pub mod concatenate;
+pub mod diagnostics;
+pub mod discovery;
+pub mod io;
 pub mod monomerize;
 pub mod orfs;
 pub mod rotate;

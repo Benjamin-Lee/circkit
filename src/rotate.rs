@@ -1,5 +1,6 @@
 use anyhow::bail;
 use seq_io::fasta::Record;
+use std::io::Write;
 
 use crate::{
     commands::Command,
@@ -16,34 +17,47 @@ pub fn rotate(cmd: &Command) -> anyhow::Result<()> {
         } => {
             let mut reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
+            let mut scratch = Vec::new();
 
-            // ensure bases and percent aren't 0
-            if bases == &Some(0) || percent == &Some(0.0) {
-                bail!("Rotation by 0 is not allowed");
-            }
-
-            while let Some(Ok(record)) = reader.next() {
-                let full_seq = record.full_seq();
+            while let Some(record) = reader.next() {
+                let record = record?;
+                let sequence = crate::io::joined_sequence(&record, &mut scratch);
+                let length = sequence.len();
 
                 let new_start_index = match percent {
-                    Some(percent) => f64::floor(full_seq.len() as f64 * percent) as i64,
-                    None => bases.expect("Must provide either --bases or --percent"),
+                    Some(percent) => {
+                        let shift = (length as f64 * percent).floor();
+                        if !shift.is_finite()
+                            || shift < i64::MIN as f64
+                            || shift >= -(i64::MIN as f64)
+                        {
+                            return Err(crate::diagnostics::argument_error(
+                                "rotation percentage is too large for this record",
+                            ));
+                        }
+                        shift as i64
+                    }
+                    None => match bases {
+                        Some(bases) => *bases,
+                        None => bail!("provide either --bases or --percent"),
+                    },
                 };
 
-                writer.write_all(b">").unwrap();
-                writer.write_all(record.head()).unwrap();
-                writer.write_all(b"\n").unwrap();
+                writer.write_all(b">")?;
+                writer.write_all(record.head())?;
+                writer.write_all(b"\n")?;
 
-                let rotation_index = match new_start_index >= 0 {
-                    true => full_seq.len() - (new_start_index as usize % full_seq.len()),
-                    false => new_start_index.unsigned_abs() as usize % full_seq.len(),
+                let rotation_index = match (length, new_start_index >= 0) {
+                    (0, _) => 0,
+                    (_, true) => length - (new_start_index as u64 % length as u64) as usize,
+                    (_, false) => (new_start_index.unsigned_abs() % length as u64) as usize,
                 };
 
-                writer.write_all(&full_seq[rotation_index..]).unwrap();
-                writer.write_all(&full_seq[..rotation_index]).unwrap();
-                writer.write_all(b"\n").unwrap();
+                writer.write_all(&sequence[rotation_index..])?;
+                writer.write_all(&sequence[..rotation_index])?;
+                writer.write_all(b"\n")?;
             }
-
+            writer.finish()?;
             Ok(())
         }
         _ => panic!("This should never happen"),

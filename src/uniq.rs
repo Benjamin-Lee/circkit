@@ -5,9 +5,11 @@ use crate::{
         table_path_to_writer,
     },
 };
+use anyhow::Context;
 use nohash_hasher::BuildNoHashHasher;
 use seq_io::fasta::Record;
 use std::collections::{hash_map::Entry, HashMap};
+use std::io::Write;
 
 #[derive(serde::Serialize)]
 struct Row<'a> {
@@ -22,6 +24,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
             output,
             canonicalize,
             table,
+            table_format,
             threads,
             processing,
             rotation,
@@ -32,7 +35,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                 duval_max_len: rotation.rotation_cutoff,
             };
             let mut writer = output_to_writer(output)?;
-            let mut table_writer = table_path_to_writer(table);
+            let mut table_writer = table_path_to_writer(table, *table_format, output)?;
             let mut seen = HashMap::<u64, String, BuildNoHashHasher<u64>>::default();
 
             process_fasta(
@@ -55,43 +58,48 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
 
                     match seen.entry(canonicalized_hash) {
                         Entry::Vacant(entry) => {
-                            entry.insert(record.id().unwrap().to_owned());
+                            entry.insert(if table_writer.is_some() {
+                                record
+                                    .id()
+                                    .context(
+                                        "FASTA identifiers must be UTF-8 when writing metadata",
+                                    )?
+                                    .to_owned()
+                            } else {
+                                String::new()
+                            });
 
-                            writer.write_all(b">").unwrap();
-                            writer.write_all(record.head()).unwrap();
-                            writer.write_all(b"\n").unwrap();
+                            writer.write_all(b">")?;
+                            writer.write_all(record.head())?;
+                            writer.write_all(b"\n")?;
                             match canonicalize {
                                 true => {
-                                    writer.write_all(&data.0).unwrap();
+                                    writer.write_all(&data.0)?;
                                 }
                                 false => {
-                                    writer.write_all(record.seq()).unwrap();
+                                    writer.write_all(record.seq())?;
                                 }
                             };
-                            writer.write_all(b"\n").unwrap();
+                            writer.write_all(b"\n")?;
                         }
                         Entry::Occupied(entry) => {
                             if let Some(ref mut table_writer) = table_writer {
-                                table_writer
-                                    .serialize(Row {
-                                        id: entry.get(),
-                                        duplicate_id: record.id().unwrap(),
-                                    })
-                                    .expect("failed to serialize table row");
+                                table_writer.serialize(Row {
+                                    id: entry.get(),
+                                    duplicate_id: record.id().context(
+                                        "FASTA identifiers must be UTF-8 when writing metadata",
+                                    )?,
+                                })?;
                             }
                         }
                     }
 
-                    // Some(value) will stop the reader, and the value will be returned.
-                    // In the case of never stopping, we need to give the compiler a hint about the
-                    // type parameter, thus the special 'turbofish' notation is needed,
-                    // hoping on progress here: https://github.com/rust-lang/rust/issues/27336
-                    None::<()>
+                    Ok(())
                 },
             )?;
-            writer.flush()?;
-            if let Some(mut table_writer) = table_writer {
-                table_writer.flush()?;
+            writer.finish()?;
+            if let Some(table_writer) = table_writer {
+                table_writer.finish()?;
             }
         }
         _ => panic!("input command is not for uniq"),
