@@ -504,12 +504,19 @@ fn closed_stdout_is_quiet_success_in_serial_and_pipeline_commands() {
 
 #[cfg(unix)]
 #[test]
-fn non_utf8_paths_and_headers_work_without_metadata() {
-    use std::os::unix::ffi::OsStringExt;
+fn byte_headers_and_native_paths_work_without_metadata() {
     let directory = assert_fs::TempDir::new().unwrap();
-    let input = directory
-        .path()
-        .join(std::ffi::OsString::from_vec(b"input \xff.fasta".to_vec()));
+    // APFS enforces UTF-8 filenames. Linux also exercises arbitrary path bytes;
+    // non-UTF-8 FASTA headers are valid on both filesystems.
+    #[cfg(target_os = "macos")]
+    let input = directory.path().join("input séquences.fasta");
+    #[cfg(not(target_os = "macos"))]
+    let input = {
+        use std::os::unix::ffi::OsStringExt;
+        directory
+            .path()
+            .join(std::ffi::OsString::from_vec(b"input \xff.fasta".to_vec()))
+    };
     let output = directory.path().join("output with spaces.fasta");
     std::fs::write(&input, b">id\xff\nACGT\n").unwrap();
     Command::cargo_bin("circkit")
