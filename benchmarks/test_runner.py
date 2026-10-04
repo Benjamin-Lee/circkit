@@ -36,6 +36,19 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(runner.distribution([0.5])["median_seconds"], 0.5)
         self.assertEqual(runner.distribution([0.5])["stdev_seconds"], 0)
 
+    def test_metadata_comparison_checks_fields_nulls_and_numeric_ratios(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tsv = Path(directory) / "table.tsv"
+            ndjson = Path(directory) / "table.jsonl"
+            tsv.write_text("seq_id\tstop\tratio\nsequence description\t\t1.0\n")
+            ndjson.write_text('{"ratio": 1, "seq_id": "sequence description", "stop": null}\n')
+            self.assertEqual(runner.metadata_records(tsv, "tsv"), runner.metadata_records(ndjson, "jsonl"))
+            ndjson.write_text('{"ratio": 1, "seq_id": "sequence description", "different": null}\n')
+            self.assertNotEqual(runner.metadata_records(tsv, "tsv"), runner.metadata_records(ndjson, "jsonl"))
+            ndjson.write_text('{"id": "one"}\n{"different": "two"}\n')
+            with self.assertRaisesRegex(ValueError, "Inconsistent JSONL"):
+                runner.metadata_records(ndjson, "jsonl")
+
     def test_macos_metadata_does_not_require_linux_files(self):
         with patch.object(runner.sys, "platform", "darwin"), \
              patch.object(runner, "command", return_value="Apple M2"), \

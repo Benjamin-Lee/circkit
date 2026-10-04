@@ -3,6 +3,7 @@ use crate::{
     utils::{canonicalization_input, normalized_sequence, output_to_writer, process_fasta},
 };
 use seq_io::fasta::Record;
+use std::io::Write;
 
 pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
@@ -36,20 +37,16 @@ pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
                 },
                 |record, data| {
                     // runs in main thread
-                    writer.write_all(b">").unwrap();
-                    writer.write_all(record.head()).unwrap();
-                    writer.write_all(b"\n").unwrap();
-                    writer.write_all(&data.0).unwrap();
-                    writer.write_all(b"\n").unwrap();
+                    writer.write_all(b">")?;
+                    writer.write_all(record.head())?;
+                    writer.write_all(b"\n")?;
+                    writer.write_all(&data.0)?;
+                    writer.write_all(b"\n")?;
 
-                    // Some(value) will stop the reader, and the value will be returned.
-                    // In the case of never stopping, we need to give the compiler a hint about the
-                    // type parameter, thus the special 'turbofish' notation is needed,
-                    // hoping on progress here: https://github.com/rust-lang/rust/issues/27336
-                    None::<()>
+                    Ok(())
                 },
             )?;
-            writer.flush()?;
+            writer.finish()?;
         }
         _ => panic!("input command is not for canonicalize"),
     }

@@ -115,7 +115,7 @@ def dependency_versions(lock):
             if line.startswith(("name = ", "version = ")):
                 key, value = line.split(" = ", 1)
                 fields[key] = value.strip('"')
-        if fields.get("name") in ("bio", "memchr", "flate2", "zlib-rs", "triple_accel"):
+        if fields.get("name") in ("bio", "memchr", "flate2", "zlib-rs", "triple_accel", "clap", "seq_io", "niffler"):
             versions.setdefault(fields["name"], []).append(fields["version"])
     return versions
 
@@ -175,18 +175,21 @@ def build(args, output, files):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / name, destination)
     (baseline_source / "examples").mkdir(exist_ok=True)
+    # PR #3 introduced the configurable public API. Preserve its adapter for
+    # later baselines; older commits need the PR #2 compatibility adapter.
+    modern_baseline = (baseline_source / "benchmarks/optimized.rs").is_file()
     shutil.copytree(REPO / "benchmarks", baseline_source / "benchmarks", dirs_exist_ok=True)
     driver = (REPO / "examples/performance.rs").read_text()
     adapter = '#[path = "../benchmarks/optimized.rs"]'
     if driver.count(adapter) != 1:
         raise ValueError("Expected a single benchmark adapter path")
     (baseline_source / "examples/performance.rs").write_text(
-        driver.replace(adapter, '#[path = "../benchmarks/baseline.rs"]'))
+        driver if modern_baseline else driver.replace(adapter, '#[path = "../benchmarks/baseline.rs"]'))
     binary_dir = output / "binaries"
     binary_dir.mkdir(exist_ok=True)
     info = {"signature": signature, "default_profile": {"release": True, "lto": "fat", "codegen_units": 1},
             "candidate_dirty": command(["git", "status", "--porcelain"]),
-            "instrumentation": "Identical driver; baseline adapter uses only the PR #2 public API",
+            "instrumentation": "Identical driver; baseline adapter: " + ("PR #3 public API" if modern_baseline else "PR #2 public API"),
             "stages": {}}
     stages = [("baseline", baseline_source, []), ("optimized", candidate_source, [])]
     if not args.no_scalar:
@@ -233,6 +236,26 @@ def fasta(path):
     return records
 
 
+def metadata_records(path, format):
+    with path.open(newline="") as source:
+        if format == "jsonl":
+            rows = [json.loads(line) for line in source]
+            fields = sorted(rows[0]) if rows else []
+            if any(sorted(row) != fields for row in rows):
+                raise ValueError("Inconsistent JSONL metadata fields")
+        else:
+            reader = csv.DictReader(source, delimiter="\t" if format == "tsv" else ",")
+            rows = list(reader)
+            fields = sorted(reader.fieldnames or [])
+    def value(key, item):
+        if item is None:
+            return ""
+        if key == "ratio":
+            return repr(float(item))
+        return str(item)
+    return {"fields": fields, "rows": sorted(tuple((key, value(key, row[key])) for key in fields) for row in rows)}
+
+
 def fingerprint(records):
     digest = hashlib.sha256()
     for header, sequence in sorted(records):
@@ -249,6 +272,7 @@ def fixtures(output, suite):
         "smoke": (200, 3, 3000, 100),
         "quick": (10000, 25, 30000, 1000),
         "full": (100000, 1000, 300000, 10000),
+        "io": (100000, 1000, 300000, 10000),
     }[suite]
     rng = random.Random(SEED)
     def write(name, n, length, kind="random", wrapped=False):
@@ -337,12 +361,18 @@ class Runner:
                            for stage, v in samples.items() if stage != reference)
         print(case + ": " + ratios, flush=True)
 
-    def cli(self, name, operation, dataset, threads, candidate_extra=(), scalar=False, compressed=False):
+    def cli(self, name, operation, dataset, threads, candidate_extra=(), scalar=False,
+            compressed=False, stdout_output=False, metadata=None):
         stages = ["baseline", "optimized"]
         if scalar and not self.args.no_scalar:
             stages.append("optimized-scalar")
-        settings = {"operation": operation, "input": str(dataset), "threads": threads,
-                    "candidate_args": list(candidate_extra), "gzip_output": compressed}
+        threaded = operation not in ("cat", "decat", "rotate")
+        has_metadata = operation in ("monomerize", "uniq", "orfs")
+        settings = {"operation": operation, "input": str(dataset),
+                    "threads": threads if threaded else None,
+                    "candidate_args": list(candidate_extra), "gzip_output": compressed,
+                    "output_stream": "stdout" if stdout_output else "file",
+                    "timed_metadata": metadata}
         common = []
         if operation == "monomerize":
             common = ["--keep-all"]
@@ -350,35 +380,47 @@ class Runner:
                 common += ["--max-mismatch", "2"]
         if operation == "orfs" and "dense" in name:
             common = ["--min-length", "0", "--include-stop"]
+        if operation == "rotate":
+            common = ["--bases", "5"]
         if "sensitive" in name:
             common += ["--sensitive"]
         settings["common_args"] = common
-        def cmd(stage, output):
-            args = [str(self.output / "binaries" / stage), operation, str(dataset),
-                    "--threads", str(threads), "-o", str(output)] + common
+        def cmd(stage, output, table=None):
+            args = [str(self.output / "binaries" / stage), operation, str(dataset)] + common
+            if threaded:
+                args += ["--threads", str(threads)]
+            if not stdout_output:
+                args += ["-o", str(output)]
+            if table is not None:
+                args += ["--table", str(table)]
+                if metadata == "jsonl" and stage != "baseline":
+                    args += ["--table-format", "jsonl"]
             return args + (list(candidate_extra) if stage != "baseline" else [])
         digests, tables = {}, {}
         for stage in stages:
             path = self.scratch / (stage + (".fasta.gz" if compressed else ".fasta"))
-            table = self.scratch / (stage + ".tsv")
-            args = cmd(stage, path)
-            if operation != "canonicalize":
-                args += ["--table", str(table)]
-            subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                           timeout=self.args.timeout, check=True)
+            table = self.scratch / (stage + ".tsv") if has_metadata else None
+            args = cmd(stage, path, table)
+            if stdout_output:
+                # Omit -o rather than use '-': old baselines interpret '-' as a filename.
+                with path.open("wb") as sink:
+                    subprocess.run(args, stdout=sink, stderr=subprocess.PIPE,
+                                   timeout=self.args.timeout, check=True)
+            else:
+                subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                               timeout=self.args.timeout, check=True)
             digests[stage] = fingerprint(fasta(path))
-            if operation != "canonicalize":
-                with table.open(newline="") as source:
-                    rows = list(csv.reader(source, delimiter="\t"))
-                tables[stage] = {"header": rows[:1], "rows": sorted(rows[1:])}
+            if has_metadata:
+                tables[stage] = metadata_records(table, "jsonl" if metadata == "jsonl" and stage != "baseline" else "tsv")
         if len(set(digests.values())) != 1 or any(t != tables[stages[0]] for t in tables.values()):
             raise ValueError("FASTA or metadata differs for " + name)
         self.validation.append({"case": name, "type": "cli", "settings": settings,
                                 "fasta_record_hashes": digests, "metadata_identical": True})
         def sample(stage):
             dest = self.scratch / (stage + ".timed.gz") if compressed else os.devnull
+            table = self.scratch / (stage + ".timed.csv") if metadata else None
             start = time.perf_counter_ns()
-            subprocess.run(cmd(stage, dest), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            subprocess.run(cmd(stage, dest, table), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                            timeout=self.args.timeout, check=True)
             return (time.perf_counter_ns() - start) / 1e9, {}
         self.measure("cli", name, stages, "baseline", settings, sample)
@@ -420,7 +462,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=REPO / "target/benchmarks")
     parser.add_argument("--baseline", default=BASELINE)
-    parser.add_argument("--suite", choices=["smoke", "quick", "full"], default="quick")
+    parser.add_argument("--suite", choices=["smoke", "quick", "full", "io"], default="quick")
     parser.add_argument("--trials", type=positive, default=5)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--threads", type=numbers, default=[1, min(4, os.cpu_count() or 1)])
@@ -491,62 +533,77 @@ def main():
     write_json(args.output / "inputs.json", manifest)
     runner = Runner(args, args.output)
     runner.save()
-    for op, dataset, suffix in [
-        ("canonicalize", "short", ""), ("canonicalize", "long", ""), ("canonicalize", "medium", ""),
-        ("uniq", "short", ""), ("uniq", "medium", ""),
-        ("monomerize", "short", ""), ("monomerize", "dimers", ""),
-        ("monomerize", "medium", "-sensitive"), ("monomerize", "false-seeds", "-approx-stress"),
-        ("orfs", "short", ""), ("orfs", "medium", ""), ("orfs", "dense", "-stress"),
-        ("canonicalize", "gzip", ""),
-    ]:
-        runner.cli(op + "-" + dataset + suffix, op, paths[dataset], 1,
-                   scalar=dataset == "short", compressed=dataset == "gzip")
-    runner.cli("canonicalize-gzip-input", "canonicalize", paths["gzip"], 1)
-    runner.cli("canonicalize-gzip-output", "canonicalize", paths["short"], 1, compressed=True)
+    for op in ["cat", "decat", "rotate"]:
+        for key in ["short", "medium", "long"]:
+            for stdout_output in [False, True]:
+                runner.cli(op + "-" + key + ("-stdout" if stdout_output else "-file"),
+                           op, paths[key], 1, stdout_output=stdout_output)
+    for op in ["canonicalize", "monomerize", "orfs"]:
+        runner.cli(op + "-short-stdout", op, paths["short"], 1, stdout_output=True)
+    for op, key in [("monomerize", "dimers"), ("uniq", "short"), ("orfs", "medium")]:
+        for format in ["csv", "jsonl"]:
+            runner.cli(op + "-" + key + "-metadata-" + format, op, paths[key], 1,
+                       metadata=format)
     for key in paths:
         if key.startswith("custom-"):
             for op in ["canonicalize", "monomerize", "orfs"]:
                 runner.cli(op + "-" + key, op, paths[key], 1)
-    for threads in sorted(set(args.threads) - {1}):
-        for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
-                        ("monomerize", "dimers"), ("orfs", "short")]:
-            runner.cli(op + "-" + key + "-threads-" + str(threads), op, paths[key], threads)
-    for op, length, pattern in [
-        ("lmsr-index", 150, "random"), ("canonicalize", 150, "random"),
-        ("lmsr-index", 208399, "random"), ("monomerize", 300, "dimer"),
-        ("find-orfs", 150, "random"), ("find-orfs", 3000 if args.suite == "smoke" else 30000, "dense"),
-        ("orf-indices", 3000 if args.suite == "smoke" else 30000, "dense"),
-        ("extract-orf", 10000, "random"), ("normalize", 150, "random"),
-    ]:
-        runner.micro(op + "-" + str(length) + "-" + pattern, op, length, pattern)
-    if not args.no_tuning:
-        lengths = {"smoke": [150, 32769], "quick": [150, 4096, 32768, 65536],
-                   "full": [150, 1000, 4096, 8192, 32768, 32769, 65536, 208399]}[args.suite]
-        for length in lengths:
-            for pattern in ["random", "homopolymer"]:
-                runner.micro("rotation-cutoff-" + str(length) + "-" + pattern, "lmsr-index",
-                             length, pattern, cutoffs=args.rotation_cutoffs)
-                runner.micro("canonicalize-cutoff-" + str(length) + "-" + pattern, "canonicalize",
-                             length, pattern, cutoffs=args.rotation_cutoffs)
-        for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
-                        ("canonicalize", "long"), ("uniq", "medium")]:
-            for cutoff in args.rotation_cutoffs:
-                runner.cli(op + "-rotation-cutoff-" + key + "-" + str(cutoff),
-                           op, paths[key], 1, ["--rotation-cutoff", str(cutoff)])
-        for pattern, length in [("dimer", 300), ("false-seeds", 11011)]:
-            runner.micro("mismatch-chunk-" + pattern, "monomerize", length, pattern,
-                         chunks=args.mismatch_chunks, mismatch=2)
-        for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
-                        ("canonicalize", "long"), ("canonicalize", "gzip"),
-                        ("uniq", "short"), ("uniq", "medium"),
-                        ("monomerize", "dimers"), ("orfs", "short")]:
-            for mode in ["serial", "pipeline"]:
-                runner.cli(op + "-" + key + "-execution-" + mode, op, paths[key], 1,
-                           ["--execution", mode], compressed=key == "gzip")
-        queue_threads = max(args.threads)
-        for depth in args.queue_depths:
-            runner.cli("orfs-queue-" + str(depth), "orfs", paths["medium"], queue_threads,
-                       ["--execution", "pipeline", "--queue-depth", str(depth)])
+    if args.suite == "io":
+        runner.cli("canonicalize-gzip-output", "canonicalize", paths["short"], 1, compressed=True)
+        runner.cli("canonicalize-gzip-input", "canonicalize", paths["gzip"], 1)
+    else:
+        for op, dataset, suffix in [
+            ("canonicalize", "short", ""), ("canonicalize", "long", ""), ("canonicalize", "medium", ""),
+            ("uniq", "short", ""), ("uniq", "medium", ""),
+            ("monomerize", "short", ""), ("monomerize", "dimers", ""),
+            ("monomerize", "medium", "-sensitive"), ("monomerize", "false-seeds", "-approx-stress"),
+            ("orfs", "short", ""), ("orfs", "medium", ""), ("orfs", "dense", "-stress"),
+            ("canonicalize", "gzip", ""),
+        ]:
+            runner.cli(op + "-" + dataset + suffix, op, paths[dataset], 1,
+                       scalar=dataset == "short", compressed=dataset == "gzip")
+        runner.cli("canonicalize-gzip-input", "canonicalize", paths["gzip"], 1)
+        runner.cli("canonicalize-gzip-output", "canonicalize", paths["short"], 1, compressed=True)
+        for threads in sorted(set(args.threads) - {1}):
+            for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
+                            ("monomerize", "dimers"), ("orfs", "short")]:
+                runner.cli(op + "-" + key + "-threads-" + str(threads), op, paths[key], threads)
+        for op, length, pattern in [
+            ("lmsr-index", 150, "random"), ("canonicalize", 150, "random"),
+            ("lmsr-index", 208399, "random"), ("monomerize", 300, "dimer"),
+            ("find-orfs", 150, "random"), ("find-orfs", 3000 if args.suite == "smoke" else 30000, "dense"),
+            ("orf-indices", 3000 if args.suite == "smoke" else 30000, "dense"),
+            ("extract-orf", 10000, "random"), ("normalize", 150, "random"),
+        ]:
+            runner.micro(op + "-" + str(length) + "-" + pattern, op, length, pattern)
+        if not args.no_tuning:
+            lengths = {"smoke": [150, 32769], "quick": [150, 4096, 32768, 65536],
+                       "full": [150, 1000, 4096, 8192, 32768, 32769, 65536, 208399]}[args.suite]
+            for length in lengths:
+                for pattern in ["random", "homopolymer"]:
+                    runner.micro("rotation-cutoff-" + str(length) + "-" + pattern, "lmsr-index",
+                                 length, pattern, cutoffs=args.rotation_cutoffs)
+                    runner.micro("canonicalize-cutoff-" + str(length) + "-" + pattern, "canonicalize",
+                                 length, pattern, cutoffs=args.rotation_cutoffs)
+            for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
+                            ("canonicalize", "long"), ("uniq", "medium")]:
+                for cutoff in args.rotation_cutoffs:
+                    runner.cli(op + "-rotation-cutoff-" + key + "-" + str(cutoff),
+                               op, paths[key], 1, ["--rotation-cutoff", str(cutoff)])
+            for pattern, length in [("dimer", 300), ("false-seeds", 11011)]:
+                runner.micro("mismatch-chunk-" + pattern, "monomerize", length, pattern,
+                             chunks=args.mismatch_chunks, mismatch=2)
+            for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
+                            ("canonicalize", "long"), ("canonicalize", "gzip"),
+                            ("uniq", "short"), ("uniq", "medium"),
+                            ("monomerize", "dimers"), ("orfs", "short")]:
+                for mode in ["serial", "pipeline"]:
+                    runner.cli(op + "-" + key + "-execution-" + mode, op, paths[key], 1,
+                               ["--execution", mode], compressed=key == "gzip")
+            queue_threads = max(args.threads)
+            for depth in args.queue_depths:
+                runner.cli("orfs-queue-" + str(depth), "orfs", paths["medium"], queue_threads,
+                           ["--execution", "pipeline", "--queue-depth", str(depth)])
     environment["completed_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     environment["status"] = "completed"
     write_json(args.output / "environment.json", environment)

@@ -1,5 +1,7 @@
 use anyhow::bail;
+use anyhow::Context;
 use seq_io::fasta::Record;
+use std::io::Write;
 
 use crate::{
     commands::Command,
@@ -9,8 +11,8 @@ use crate::{
 };
 
 #[derive(serde::Serialize)]
-struct Row {
-    id: String,
+struct Row<'a> {
+    id: &'a str,
     original_length: usize,
     monomer_length: usize,
 }
@@ -30,6 +32,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
             max_length,
             keep_all,
             table,
+            table_format,
             threads,
             mismatch_chunk_size,
             processing,
@@ -50,12 +53,12 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
-            let mut table_writer = table_path_to_writer(table);
+            let mut table_writer = table_path_to_writer(table, *table_format)?;
 
             let mut builder = circkit::monomerize::Monomerizer::builder();
 
             // set the seed length
-            builder.seed_len((*seed_length).try_into().expect("Seed length is too large"));
+            builder.seed_len(usize::try_from(*seed_length).context("seed length is too large")?);
             builder.mismatch_chunk_size(*mismatch_chunk_size);
 
             // set the maximum mismatch count
@@ -68,7 +71,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                 builder.overlap_min_identity(min_identity);
             }
 
-            let monomerizer = builder.build().unwrap();
+            let monomerizer = builder.build().context("configure monomerizer")?;
 
             process_fasta(
                 reader,
@@ -89,8 +92,8 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     }
                 },
                 |record, idx| {
-                    // get the full sequence
-                    let full_seq = record.full_seq();
+                    // Count sequence bytes without joining wrapped lines.
+                    let full_length = crate::io::sequence_len(&record);
 
                     // region: check the monomer is long enough, either absolute or relative to the original sequence
 
@@ -106,7 +109,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     // absolute overlap length
                     if let Some(min_overlap) = *min_overlap {
                         if let Some(monomer_length) = *idx {
-                            if full_seq.len() - monomer_length < min_overlap {
+                            if full_length - monomer_length < min_overlap {
                                 *idx = None; // reject the monomer
                             }
                         }
@@ -115,9 +118,9 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     // relative overlap length
                     if let Some(min_overlap_percent) = *min_overlap_percent {
                         if let Some(monomer_length) = *idx {
-                            // full_seq.len() - monomer_length is the length of the overlapping region
+                            // full_length - monomer_length is the length of the overlapping region
                             // a complete monomer would have an overlap ratio of 1.0
-                            if (full_seq.len() - monomer_length) as f64 / (monomer_length as f64)
+                            if (full_length - monomer_length) as f64 / (monomer_length as f64)
                                 < min_overlap_percent
                             {
                                 *idx = None; // reject the monomer
@@ -129,30 +132,29 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     // when keep_all is true, we write all sequences
                     // otherwise, we only write sequences that have been monomerized (i.e. the monomer index is Some)
                     if (idx.is_some()) || *keep_all {
-                        let end_idx = idx.unwrap_or(full_seq.len());
-                        writer.write_all(b">").unwrap();
-                        writer.write_all(record.head()).unwrap();
-                        writer.write_all(b"\n").unwrap();
-                        writer.write_all(&full_seq[..end_idx]).unwrap();
-                        writer.write_all(b"\n").unwrap();
+                        let end_idx = idx.unwrap_or(full_length);
+                        writer.write_all(b">")?;
+                        writer.write_all(record.head())?;
+                        writer.write_all(b"\n")?;
+                        crate::io::write_sequence_range(&mut writer, &record, 0..end_idx)?;
+                        writer.write_all(b"\n")?;
 
                         // write the table file if it was requested
                         if let Some(ref mut table_writer) = table_writer {
-                            table_writer
-                                .serialize(Row {
-                                    id: std::str::from_utf8(record.head()).unwrap().to_string(),
-                                    original_length: full_seq.len(),
-                                    monomer_length: end_idx,
-                                })
-                                .expect("failed to write to table")
+                            table_writer.serialize(Row {
+                                id: std::str::from_utf8(record.head())
+                                    .context("FASTA headers must be UTF-8 when writing metadata")?,
+                                original_length: full_length,
+                                monomer_length: end_idx,
+                            })?
                         }
                     }
-                    None::<()>
+                    Ok(())
                 },
             )?;
-            writer.flush()?;
-            if let Some(mut table_writer) = table_writer {
-                table_writer.flush()?;
+            writer.finish()?;
+            if let Some(table_writer) = table_writer {
+                table_writer.finish()?;
             }
             Ok(())
         }

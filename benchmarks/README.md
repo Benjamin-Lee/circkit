@@ -1,7 +1,7 @@
 # Performance and portable benchmarking
 
 Run on the machine whose performance matters. Python 3.9+, Git, a native Rust
-toolchain with Cargo, and the repository's history are required. Linux and macOS
+toolchain (Rust 1.85+) with Cargo, and the repository's history are required. Linux and macOS
 are supported; the runner uses only Python's standard library. Cargo may download
 dependencies on the first build. In a shallow clone, run `git fetch --unshallow`
 so the baseline commit is available.
@@ -32,6 +32,25 @@ Send back `target/benchmarks-arm/report.zip`. It contains:
 Input sequences and source/build directories are retained locally and excluded
 from the report archive. Failed runs exit nonzero and retain partial results.
 
+## Reader/writer comparisons
+
+Use the `io` suite to compare command-line I/O against PR #3. It covers plain
+files and stdout, `cat`/`decat`/`rotate` on short, wrapped medium, and long sequences,
+processing with CSV or JSONL metadata, and gzip input/output. It skips library
+microbenchmarks and parameter sweeps.
+
+```sh
+python3 benchmarks/run.py --suite io --baseline f9795abf013b64b35aa63d4744852b408b187242 \
+  --trials 5 --no-scalar --output target/benchmarks-io \
+  --note "ARM laptop, plugged in, default power mode"
+```
+
+CSV and JSONL cases compare the candidate's selected format against baseline CSV;
+FASTA records and metadata fields/values must agree before timing. Metadata is
+written to a real temporary file during these timings. For JSONL, field order is
+irrelevant, numeric ratios are compared numerically, and null stop positions
+correspond to empty CSV cells. Other suites also include these I/O cases.
+
 ## What is compared
 
 The default baseline is merged PR #2, commit
@@ -43,10 +62,12 @@ overrides are recorded. No `target-cpu=native` flag is added. A third build with
 `scalar-normalization` measures the fallback for the new normalization fast path.
 
 The shared Rust driver uses small adapters to call each revision's public API.
+The runner selects the adapter matching the baseline's PR #2 or PR #3 public API.
 Library timings exclude preparation, output checksums, and process startup. CLI
-timings include startup, parsing, processing, and output; plain output goes to the
-OS null device, while gzip output goes to a real temporary file. Input caches are
-warm. Stages are interleaved in a seeded random order. Library loop counts are
+timings include startup, parsing, processing, and output. Plain file and stdout
+output go to the OS null device through their respective code paths; gzip output
+goes to a real temporary file. The case settings identify which stream is timed.
+Input caches are warm. Stages are interleaved in a seeded random order. Library loop counts are
 calibrated independently to avoid making slow stages dominate the run.
 
 Before timing each configuration, the runner compares library checksums, FASTA
@@ -76,7 +97,7 @@ These controls affect execution cost, not biological matching criteria:
 | `--mismatch-chunk-size BYTES` | 256 | `monomerize`: check approximate overlaps in chunks and stop once mismatches exceed the permitted count. Must be positive. Exact matches use byte equality; debug logging computes the full distance. |
 | `--queue-depth BUFFERS` | 64; ORFs: max(2, 2*threads) | Bound queued FASTA work in pipeline execution. Must be positive. Legacy `monomerize --batch-size` remains an alias. |
 | `--execution auto\|serial\|pipeline` | auto | Auto uses serial processing with one worker and one available CPU, or for single-worker `canonicalize`/`uniq` with plain input and output. Otherwise it uses a reader/worker/writer pipeline. Serial requires `--threads 1`. |
-| `--threads N` | logical CPUs | Existing worker count, now validated to be positive. |
+| `--threads N` | available logical CPUs | Positive worker count; respects OS affinity and CPU quotas. |
 
 For example:
 

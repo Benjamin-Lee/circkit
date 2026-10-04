@@ -1,13 +1,11 @@
 use crate::commands::{Execution, ProcessingOptions};
-use anyhow::bail;
+use crate::diagnostics::argument_error;
+pub use crate::io::{input_to_reader, output_to_writer, table_path_to_writer, FastaReader};
+use crate::io::{input_to_reader_with_format, output_compression_format};
 use niffler::send::compression::Format;
 use seq_io::fasta::Reader;
 use std::borrow::Cow;
-use std::{
-    fs::File,
-    io::{prelude::*, stdin, stdout, BufReader, BufWriter},
-    path::PathBuf,
-};
+use std::{io::Read, path::PathBuf};
 
 /// Borrow already normalized DNA instead of allocating and then discarding a copy.
 pub fn normalized_sequence(sequence: &[u8]) -> Cow<'_, [u8]> {
@@ -87,10 +85,10 @@ impl ProcessingOptions {
         default_queue_depth: usize,
     ) -> anyhow::Result<FastaSettings> {
         if threads == 0 {
-            bail!("The number of threads must be at least one");
+            return Err(argument_error("The number of threads must be at least one"));
         }
         if self.execution == Execution::Serial && threads != 1 {
-            bail!("Serial execution requires --threads 1");
+            return Err(argument_error("Serial execution requires --threads 1"));
         }
         let single_cpu = std::thread::available_parallelism().map_or(true, |cpus| cpus.get() == 1);
         Ok(FastaSettings {
@@ -104,42 +102,38 @@ impl ProcessingOptions {
 
 /// Serial execution reuses one record's work buffers. Pipeline execution retains
 /// overlap between reading, processing, and writing, with bounded queues.
-pub fn process_fasta<D, W, F, Out>(
+pub fn process_fasta<D, W, F>(
     mut reader: Reader<Box<dyn Read + Send>>,
     settings: FastaSettings,
     work: W,
     mut output: F,
-) -> anyhow::Result<Option<Out>>
+) -> anyhow::Result<()>
 where
     D: Default + Send,
     W: Send + Sync + Fn(seq_io::fasta::RefRecord<'_>, &mut D),
-    F: FnMut(seq_io::fasta::RefRecord<'_>, &mut D) -> Option<Out>,
+    F: FnMut(seq_io::fasta::RefRecord<'_>, &mut D) -> anyhow::Result<()>,
 {
     if settings.serial {
         let mut data = D::default();
         while let Some(record) = reader.next() {
             let record = record?;
             work(record.clone(), &mut data);
-            if let Some(value) = output(record, &mut data) {
-                return Ok(Some(value));
-            }
+            output(record, &mut data)?;
         }
-        Ok(None)
+        Ok(())
     } else {
-        Ok(seq_io::parallel::parallel_fasta(
+        let error = seq_io::parallel::parallel_fasta(
             reader,
             settings.threads,
             settings.queue_depth,
             work,
-            output,
-        )?)
+            |record, data| output(record, data).err(),
+        )?;
+        match error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
-}
-
-pub type FastaReader = Reader<Box<dyn Read + Send>>;
-
-pub fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<FastaReader> {
-    Ok(input_to_reader_with_format(input)?.0)
 }
 
 /// Plain single-worker canonicalization benefits from reusing buffers without
@@ -161,79 +155,4 @@ pub fn canonicalization_input(
         settings.serial = true;
     }
     Ok((reader, settings))
-}
-
-fn input_to_reader_with_format(input: &Option<PathBuf>) -> anyhow::Result<(FastaReader, Format)> {
-    let source: Box<dyn Read + Send> = match input {
-        Some(input) => Box::new(BufReader::new(File::open(input)?)),
-        None => {
-            if atty::is(atty::Stream::Stdin) {
-                bail!("No stdin detected. Did you mean to include a file argument?");
-            }
-            Box::new(BufReader::new(stdin()))
-        }
-    };
-    let (reader, format) = niffler::send::get_reader(source)?;
-    Ok((Reader::new(reader), format))
-}
-
-fn output_compression_format(output: &Option<PathBuf>) -> Format {
-    match output
-        .as_ref()
-        .and_then(|path| path.extension())
-        .and_then(|suffix| suffix.to_str())
-    {
-        Some("gz") => Format::Gzip,
-        Some("bz2") => Format::Bzip,
-        Some("xz") => Format::Lzma,
-        Some("zst") => Format::Zstd,
-        _ => Format::No,
-    }
-}
-
-pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Write>> {
-    let compression_format = output_compression_format(output);
-    match output {
-        Some(output) => {
-            let outfile = match File::create(output) {
-                Ok(file) => file,
-                Err(_) => {
-                    bail!(
-                        "Could not create output file {}. Are you sure it's not actually a directory?",
-                        output.display()
-                    );
-                }
-            };
-
-            let fp_bufwriter = BufWriter::new(outfile);
-            let niffed = niffler::send::get_writer(
-                Box::new(fp_bufwriter),
-                compression_format,
-                match compression_format {
-                    niffler::send::compression::Format::Gzip => niffler::compression::Level::Six,
-                    niffler::send::compression::Format::Bzip => niffler::compression::Level::Nine,
-                    niffler::send::compression::Format::Lzma => niffler::compression::Level::Six,
-                    niffler::send::compression::Format::Zstd => niffler::compression::Level::One,
-                    niffler::send::compression::Format::No => niffler::compression::Level::One,
-                },
-            )?;
-            Ok(niffed)
-        }
-        None => {
-            let stdout_bufwriter = BufWriter::new(stdout());
-            Ok(Box::new(stdout_bufwriter))
-        }
-    }
-}
-
-pub fn table_path_to_writer(table: &Option<PathBuf>) -> Option<csv::Writer<File>> {
-    table.as_ref().map(|path| {
-        csv::WriterBuilder::new()
-            .delimiter(match path.extension().and_then(|x| x.to_str()) {
-                Some("tsv") => b'\t',
-                _ => b',',
-            })
-            .from_path(path)
-            .expect("Could not create output table.")
-    })
 }
