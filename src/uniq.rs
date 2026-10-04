@@ -1,7 +1,8 @@
 use crate::{
     commands::Command,
     utils::{
-        input_to_reader, normalized_sequence, output_to_writer, process_fasta, table_path_to_writer,
+        canonicalization_input, normalized_sequence, output_to_writer, process_fasta,
+        table_path_to_writer,
     },
 };
 use nohash_hasher::BuildNoHashHasher;
@@ -25,12 +26,11 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
             processing,
             rotation,
         } => {
-            let settings = processing.resolve(*threads, 64)?;
+            let (reader, settings) = canonicalization_input(input, output, processing, *threads)?;
             let reuse_buffers = settings.serial;
             let rotation = circkit::canonicalize::RotationOptions {
                 duval_max_len: rotation.rotation_cutoff,
             };
-            let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
             let mut table_writer = table_path_to_writer(table);
             let mut seen = HashMap::<u64, String, BuildNoHashHasher<u64>>::default();

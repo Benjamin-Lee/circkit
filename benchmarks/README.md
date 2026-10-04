@@ -75,7 +75,7 @@ These controls affect execution cost, not biological matching criteria:
 | `--rotation-cutoff BYTES` | 32768 | `canonicalize`/`uniq`: contiguous allocating Duval at or below this length, constant-space two-candidate search above it. Zero forces constant-space search for nonempty inputs; a sufficiently large value forces Duval. |
 | `--mismatch-chunk-size BYTES` | 256 | `monomerize`: check approximate overlaps in chunks and stop once mismatches exceed the permitted count. Must be positive. Exact matches use byte equality; debug logging computes the full distance. |
 | `--queue-depth BUFFERS` | 64; ORFs: max(2, 2*threads) | Bound queued FASTA work in pipeline execution. Must be positive. Legacy `monomerize --batch-size` remains an alias. |
-| `--execution auto\|serial\|pipeline` | auto | Auto uses serial processing with one worker and one available CPU, otherwise a reader/worker/writer pipeline. Serial requires `--threads 1`. |
+| `--execution auto\|serial\|pipeline` | auto | Auto uses serial processing with one worker and one available CPU, or for single-worker `canonicalize`/`uniq` with plain input and output. Otherwise it uses a reader/worker/writer pipeline. Serial requires `--threads 1`. |
 | `--threads N` | logical CPUs | Existing worker count, now validated to be positive. |
 
 For example:
@@ -90,15 +90,24 @@ The library exposes `canonicalize::RotationOptions { duval_max_len }` methods an
 functions keep the default settings. Builder-based monomerizer callers keep
 working; struct-literal callers must supply the new `mismatch_chunk_size` field.
 
+Input compression is detected from file contents, including stdin; output
+compression follows the output filename. Explicit execution choices override
+auto. Plain single-worker canonicalization reuses its buffers without pipeline
+coordination. On multiple available CPUs, compressed I/O and ORFs retain the
+pipeline so reading, processing, and writing can overlap.
+
 Default benchmark sweeps compare rotation cutoffs 0/32768/1048576, mismatch chunks
 64/256/1024, serial/pipeline execution, queue depths 2/8/64, and the selected
 worker counts. Override them with `--rotation-cutoffs`, `--mismatch-chunks`,
-`--queue-depths`, and `--threads`. Rotation sweeps time the public index API;
-canonicalization and buffer behavior are also covered by equivalence tests.
+`--queue-depths`, and `--threads`. Rotation sweeps time both the index and full
+canonicalization library APIs, plus complete `canonicalize` and `uniq` commands.
+Execution comparisons cover short, wrapped medium, long, and compressed inputs;
+gzip input-only, output-only, and combined workflows are measured separately.
 
-The cutoff and chunk defaults were chosen from x86 measurements and remain
-provisional for ARM. Algorithmic ORF improvements and allocation reductions are
-portable. The normalization fast path checks AVX2 at runtime on x86 and falls back
+The rotation cutoff is empirical: algorithm preference depends on input pattern,
+length, and machine. There is no architecture-specific default. ORF and
+monomerization improvements have been measured on both x86 and Apple M2 Pro.
+The normalization fast path checks AVX2 at runtime on x86 and falls back
 to scalar code on other CPUs; there is no new ARM NEON kernel. memchr and zlib-rs
 use their own platform support. Vector widths and the 64-entry codon table are
 architecture/biology constants and are not tuning parameters.

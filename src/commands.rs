@@ -26,7 +26,8 @@ pub struct ProcessingOptions {
     #[clap(long, alias = "batch-size")]
     pub queue_depth: Option<NonZeroUsize>,
 
-    /// Execution strategy. Auto uses serial processing for one worker on one available CPU.
+    /// Execution strategy. Auto uses serial processing for one worker on one available CPU,
+    /// or for single-worker canonicalize/uniq with uncompressed input and output.
     /// Serial requires --threads 1; pipeline overlaps reading, processing, and writing.
     #[clap(long, arg_enum, default_value_t = Execution::Auto)]
     pub execution: Execution,

@@ -1,6 +1,6 @@
 use crate::{
     commands::Command,
-    utils::{input_to_reader, normalized_sequence, output_to_writer, process_fasta},
+    utils::{canonicalization_input, normalized_sequence, output_to_writer, process_fasta},
 };
 use seq_io::fasta::Record;
 
@@ -13,12 +13,11 @@ pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
             processing,
             rotation,
         } => {
-            let settings = processing.resolve(*threads, 64)?;
+            let (reader, settings) = canonicalization_input(input, output, processing, *threads)?;
             let reuse_buffers = settings.serial;
             let rotation = circkit::canonicalize::RotationOptions {
                 duval_max_len: rotation.rotation_cutoff,
             };
-            let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
 
             process_fasta(

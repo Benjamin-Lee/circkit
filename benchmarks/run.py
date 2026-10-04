@@ -461,7 +461,9 @@ def main():
                    "machine": machine(), "settings": vars(args).copy(), "seed": SEED,
                    "candidate_defaults": {"rotation_cutoff": DEFAULT_CUTOFF,
                                           "mismatch_chunk_size": DEFAULT_CHUNK,
-                                          "execution": "auto", "queue_depth": "64; orfs max(2, 2*threads)",
+                                          "execution": "auto",
+                                          "auto_execution": "serial for one worker on one CPU, or plain single-worker canonicalize/uniq; pipeline otherwise",
+                                          "queue_depth": "64; orfs max(2, 2*threads)",
                                           "gzip_level": 6},
                    "method": {"cli": "Wall time including startup, parsing and writing; warm caches",
                               "library": "Time per call excluding fixture setup, checksum and startup",
@@ -491,19 +493,23 @@ def main():
     runner.save()
     for op, dataset, suffix in [
         ("canonicalize", "short", ""), ("canonicalize", "long", ""), ("canonicalize", "medium", ""),
-        ("uniq", "short", ""), ("monomerize", "short", ""), ("monomerize", "dimers", ""),
+        ("uniq", "short", ""), ("uniq", "medium", ""),
+        ("monomerize", "short", ""), ("monomerize", "dimers", ""),
         ("monomerize", "medium", "-sensitive"), ("monomerize", "false-seeds", "-approx-stress"),
         ("orfs", "short", ""), ("orfs", "medium", ""), ("orfs", "dense", "-stress"),
         ("canonicalize", "gzip", ""),
     ]:
         runner.cli(op + "-" + dataset + suffix, op, paths[dataset], 1,
                    scalar=dataset == "short", compressed=dataset == "gzip")
+    runner.cli("canonicalize-gzip-input", "canonicalize", paths["gzip"], 1)
+    runner.cli("canonicalize-gzip-output", "canonicalize", paths["short"], 1, compressed=True)
     for key in paths:
         if key.startswith("custom-"):
             for op in ["canonicalize", "monomerize", "orfs"]:
                 runner.cli(op + "-" + key, op, paths[key], 1)
     for threads in sorted(set(args.threads) - {1}):
-        for op, key in [("canonicalize", "short"), ("monomerize", "dimers"), ("orfs", "short")]:
+        for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
+                        ("monomerize", "dimers"), ("orfs", "short")]:
             runner.cli(op + "-" + key + "-threads-" + str(threads), op, paths[key], threads)
     for op, length, pattern in [
         ("lmsr-index", 150, "random"), ("canonicalize", 150, "random"),
@@ -520,12 +526,23 @@ def main():
             for pattern in ["random", "homopolymer"]:
                 runner.micro("rotation-cutoff-" + str(length) + "-" + pattern, "lmsr-index",
                              length, pattern, cutoffs=args.rotation_cutoffs)
+                runner.micro("canonicalize-cutoff-" + str(length) + "-" + pattern, "canonicalize",
+                             length, pattern, cutoffs=args.rotation_cutoffs)
+        for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
+                        ("canonicalize", "long"), ("uniq", "medium")]:
+            for cutoff in args.rotation_cutoffs:
+                runner.cli(op + "-rotation-cutoff-" + key + "-" + str(cutoff),
+                           op, paths[key], 1, ["--rotation-cutoff", str(cutoff)])
         for pattern, length in [("dimer", 300), ("false-seeds", 11011)]:
             runner.micro("mismatch-chunk-" + pattern, "monomerize", length, pattern,
                          chunks=args.mismatch_chunks, mismatch=2)
-        for op, key in [("canonicalize", "short"), ("monomerize", "dimers"), ("orfs", "short")]:
+        for op, key in [("canonicalize", "short"), ("canonicalize", "medium"),
+                        ("canonicalize", "long"), ("canonicalize", "gzip"),
+                        ("uniq", "short"), ("uniq", "medium"),
+                        ("monomerize", "dimers"), ("orfs", "short")]:
             for mode in ["serial", "pipeline"]:
-                runner.cli(op + "-execution-" + mode, op, paths[key], 1, ["--execution", mode])
+                runner.cli(op + "-" + key + "-execution-" + mode, op, paths[key], 1,
+                           ["--execution", mode], compressed=key == "gzip")
         queue_threads = max(args.threads)
         for depth in args.queue_depths:
             runner.cli("orfs-queue-" + str(depth), "orfs", paths["medium"], queue_threads,

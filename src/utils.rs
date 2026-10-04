@@ -1,5 +1,6 @@
 use crate::commands::{Execution, ProcessingOptions};
 use anyhow::bail;
+use niffler::send::compression::Format;
 use seq_io::fasta::Reader;
 use std::borrow::Cow;
 use std::{
@@ -135,40 +136,65 @@ where
     }
 }
 
-pub fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<Reader<Box<dyn Read + Send>>> {
-    match input {
-        Some(input) => {
-            let fp_bufreader = BufReader::new(File::open(input)?);
-            let niffed = niffler::send::get_reader(Box::new(fp_bufreader))?.0;
-            let reader = Reader::new(niffed);
-            Ok(reader)
-        }
+pub type FastaReader = Reader<Box<dyn Read + Send>>;
+
+pub fn input_to_reader(input: &Option<PathBuf>) -> anyhow::Result<FastaReader> {
+    Ok(input_to_reader_with_format(input)?.0)
+}
+
+/// Plain single-worker canonicalization benefits from reusing buffers without
+/// pipeline coordination. Compressed I/O keeps the existing overlap policy.
+pub fn canonicalization_input(
+    input: &Option<PathBuf>,
+    output: &Option<PathBuf>,
+    processing: &ProcessingOptions,
+    threads: u32,
+) -> anyhow::Result<(FastaReader, FastaSettings)> {
+    // Validate execution options before opening a file or waiting for stdin.
+    let mut settings = processing.resolve(threads, 64)?;
+    let (reader, format) = input_to_reader_with_format(input)?;
+    if processing.execution == Execution::Auto
+        && threads == 1
+        && format == Format::No
+        && output_compression_format(output) == Format::No
+    {
+        settings.serial = true;
+    }
+    Ok((reader, settings))
+}
+
+fn input_to_reader_with_format(input: &Option<PathBuf>) -> anyhow::Result<(FastaReader, Format)> {
+    let source: Box<dyn Read + Send> = match input {
+        Some(input) => Box::new(BufReader::new(File::open(input)?)),
         None => {
             if atty::is(atty::Stream::Stdin) {
                 bail!("No stdin detected. Did you mean to include a file argument?");
             }
-            let stdin_bufreader = BufReader::new(stdin());
-            let niffed = niffler::send::get_reader(Box::new(stdin_bufreader))?.0;
-            let reader = Reader::new(niffed);
-            Ok(reader)
+            Box::new(BufReader::new(stdin()))
         }
+    };
+    let (reader, format) = niffler::send::get_reader(source)?;
+    Ok((Reader::new(reader), format))
+}
+
+fn output_compression_format(output: &Option<PathBuf>) -> Format {
+    match output
+        .as_ref()
+        .and_then(|path| path.extension())
+        .and_then(|suffix| suffix.to_str())
+    {
+        Some("gz") => Format::Gzip,
+        Some("bz2") => Format::Bzip,
+        Some("xz") => Format::Lzma,
+        Some("zst") => Format::Zstd,
+        _ => Format::No,
     }
 }
 
 pub fn output_to_writer(output: &Option<PathBuf>) -> anyhow::Result<Box<dyn Write>> {
+    let compression_format = output_compression_format(output);
     match output {
         Some(output) => {
-            // match the suffix of outout to see if it should be compressed
-            let suffix = output.extension().unwrap_or_default().to_str().unwrap();
-
-            let compression_format = match suffix {
-                "gz" => niffler::send::compression::Format::Gzip,
-                "bz2" => niffler::send::compression::Format::Bzip,
-                "xz" => niffler::send::compression::Format::Lzma,
-                "zst" => niffler::send::compression::Format::Zstd,
-                _ => niffler::send::compression::Format::No,
-            };
-
             let outfile = match File::create(output) {
                 Ok(file) => file,
                 Err(_) => {
