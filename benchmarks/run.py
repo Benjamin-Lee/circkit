@@ -284,6 +284,11 @@ def fixtures(output, suite):
                 elif kind == "dimer":
                     half = "".join(rng.choices("ACGT", k=length // 2))
                     sequence = half + half
+                elif kind == "duplicates":
+                    if index % 2 == 0:
+                        duplicate = "".join(rng.choices("ACGT", k=length))
+                    shift = 5 if index % 2 else 0
+                    sequence = duplicate[shift:] + duplicate[:shift]
                 elif kind == "false-seeds":
                     sequence = "C" + "AAAAAAAAAAG" * false_seeds + "AAAAAAAAAA"
                 else:
@@ -297,10 +302,11 @@ def fixtures(output, suite):
         "short": write("short", count, 150),
         "dimers": write("dimers", count // 2, 300, "dimer"),
         "medium": write("medium", medium, 10000, wrapped=True),
-        "long": write("long", 3, 208399),
+        "long": write("long", 250 if suite == "io" else 3, 208399),
         "dense": write("dense", 1, dense, "dense"),
         "false-seeds": write("false-seeds", 1, 0, "false-seeds"),
     }
+    paths["duplicates"] = write("duplicates", count, 150, "duplicates")
     paths["gzip"] = data / "short.fasta.gz"
     with paths["gzip"].open("wb") as dest:
         with gzip.GzipFile(fileobj=dest, mode="wb", mtime=0) as compressed:
@@ -540,7 +546,7 @@ def main():
                            op, paths[key], 1, stdout_output=stdout_output)
     for op in ["canonicalize", "monomerize", "orfs"]:
         runner.cli(op + "-short-stdout", op, paths["short"], 1, stdout_output=True)
-    for op, key in [("monomerize", "dimers"), ("uniq", "short"), ("orfs", "medium")]:
+    for op, key in [("monomerize", "dimers"), ("uniq", "duplicates"), ("orfs", "medium")]:
         for format in ["csv", "jsonl"]:
             runner.cli(op + "-" + key + "-metadata-" + format, op, paths[key], 1,
                        metadata=format)

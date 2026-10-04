@@ -36,7 +36,8 @@ from the report archive. Failed runs exit nonzero and retain partial results.
 
 Use the `io` suite to compare command-line I/O against PR #3. It covers plain
 files and stdout, `cat`/`decat`/`rotate` on short, wrapped medium, and long sequences,
-processing with CSV or JSONL metadata, and gzip input/output. It skips library
+processing with CSV or JSONL metadata (including discarded duplicate rows),
+and gzip input/output. The long I/O fixture uses 250 contigs to reduce startup effects. It skips library
 microbenchmarks and parameter sweeps.
 
 ```sh
