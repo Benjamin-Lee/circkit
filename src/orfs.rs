@@ -1,8 +1,10 @@
 use crate::{
     commands::Command,
-    utils::{input_to_reader, output_to_writer, table_path_to_writer},
+    utils::{
+        input_to_reader, normalized_sequence, output_to_writer, process_fasta, table_path_to_writer,
+    },
 };
-use seq_io::{fasta::Record, parallel::parallel_fasta};
+use seq_io::fasta::Record;
 
 #[derive(clap::ArgEnum, Clone, Debug, PartialEq)]
 pub enum Strand {
@@ -38,7 +40,10 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
             no_stop_required,
             table,
             threads,
+            processing,
         } => {
+            let settings =
+                processing.resolve(*threads, (*threads as usize).saturating_mul(2).max(2))?;
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
             let mut table_writer = table_path_to_writer(table);
@@ -46,23 +51,15 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
             // Step 1: Find all stop and start codons by frame
             let start_codons = start_codons.split(',').collect::<Vec<_>>();
             let stop_codons = stop_codons.split(',').collect::<Vec<_>>();
+            let matcher = circkit::orfs::CodonMatcher::new(&start_codons, &stop_codons);
 
-            parallel_fasta(
+            process_fasta(
                 reader,
-                *threads,
-                64,
+                settings,
                 |record, orfs: &mut (Vec<circkit::orfs::Orf>, Vec<circkit::orfs::Orf>, Vec<u8>)| {
                     // runs in worker
-                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
-                        Some(x) => x,
-                        None => record.seq().to_vec(),
-                    };
-
-                    let (starts, stops) = circkit::orfs::start_stop_codon_indices_by_frame_naive(
-                        std::str::from_utf8(&normalized).unwrap(),
-                        &start_codons,
-                        &stop_codons,
-                    );
+                    let normalized = normalized_sequence(record.seq());
+                    let (starts, stops) = matcher.indices(&normalized);
 
                     let mut all_orfs =
                         circkit::orfs::find_orfs_with_indices(normalized.len(), starts, stops);
@@ -79,13 +76,8 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     orfs.0 = circkit::orfs::longest_orfs(&mut all_orfs);
 
                     orfs.1 = if *strand == Strand::Both || *strand == Strand::Reverse {
-                        orfs.2 = bio::alphabets::dna::revcomp(&normalized);
-                        let (starts, stops) =
-                            circkit::orfs::start_stop_codon_indices_by_frame_naive(
-                                std::str::from_utf8(&orfs.2).unwrap(),
-                                &start_codons,
-                                &stop_codons,
-                            );
+                        orfs.2 = bio::alphabets::dna::revcomp(normalized.as_ref());
+                        let (starts, stops) = matcher.indices(&orfs.2);
 
                         let mut all_rc_orfs =
                             circkit::orfs::find_orfs_with_indices(normalized.len(), starts, stops);
@@ -107,18 +99,22 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                         "Could not convert FASTA record header to UTF-8. Are you sure it's ASCII?",
                     );
 
+                    // Join wrapped FASTA lines once per record, rather than once per ORF.
+                    let forward_sequence = if orfs.0.is_empty() {
+                        None
+                    } else {
+                        Some(record.full_seq())
+                    };
                     for orf in &orfs.0 {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
-                        writer.write_all(b"_ORF").unwrap();
-                        writer.write_all(orf.start.to_string().as_bytes()).unwrap();
-                        writer.write_all(b"\n").unwrap();
-                        writer
-                            .write_all(
-                                orf.seq_with_opts(&record.full_seq(), *include_stop)
-                                    .as_bytes(),
-                            )
-                            .unwrap();
+                        writeln!(writer, "_ORF{}", orf.start).unwrap();
+                        orf.write_seq_with_opts(
+                            forward_sequence.as_ref().unwrap(),
+                            *include_stop,
+                            &mut *writer,
+                        )
+                        .unwrap();
                         writer.write_all(b"\n").unwrap();
 
                         // write the table file if it was requested
@@ -135,7 +131,8 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                                             false => 3,
                                         },
                                     wraps: orf.wraps,
-                                    ratio: orf.length as f64 / record.full_seq().len() as f64,
+                                    ratio: orf.length as f64
+                                        / forward_sequence.as_ref().unwrap().len() as f64,
                                 })
                                 .expect("failed to write to table");
                         }
@@ -143,11 +140,8 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                     for orf in &orfs.1 {
                         writer.write_all(b">").unwrap();
                         writer.write_all(record.head()).unwrap();
-                        writer.write_all(b"_RC_ORF").unwrap();
-                        writer.write_all(orf.start.to_string().as_bytes()).unwrap();
-                        writer.write_all(b"\n").unwrap();
-                        writer
-                            .write_all(orf.seq_with_opts(&orfs.2, *include_stop).as_bytes())
+                        writeln!(writer, "_RC_ORF{}", orf.start).unwrap();
+                        orf.write_seq_with_opts(&orfs.2, *include_stop, &mut *writer)
                             .unwrap();
                         writer.write_all(b"\n").unwrap();
 

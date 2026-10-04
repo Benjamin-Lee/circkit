@@ -1,9 +1,10 @@
 use bio::alignment::distance::simd::*;
 use bio::alphabets::dna;
-use bio::pattern_matching::shift_and;
 use log::{debug, warn};
+use memchr::memmem;
+use std::num::NonZeroUsize;
 
-#[derive(Builder, Default, Clone, Copy)]
+#[derive(Builder, Clone, Copy)]
 #[builder(setter(strip_option), build_fn(validate = "Self::validate"))]
 pub struct Monomerizer {
     /// The maximum number of mismatches allowed in an overlap. Conflicts with `overlap_min_identity`.
@@ -14,6 +15,21 @@ pub struct Monomerizer {
     pub overlap_min_identity: Option<f64>,
     /// The size of the seed to search for in the overlap.
     pub seed_len: usize,
+    /// Bytes checked before rejecting an approximate overlap. This empirical
+    /// performance setting does not change the mismatch or identity cutoff.
+    #[builder(default = "NonZeroUsize::new(256).unwrap()")]
+    pub mismatch_chunk_size: NonZeroUsize,
+}
+
+impl Default for Monomerizer {
+    fn default() -> Self {
+        Self {
+            overlap_dist: None,
+            overlap_min_identity: None,
+            seed_len: 0,
+            mismatch_chunk_size: NonZeroUsize::new(256).unwrap(),
+        }
+    }
 }
 
 impl MonomerizerBuilder {
@@ -57,15 +73,17 @@ impl Monomerizer {
         let seed = &seq[seq.len() - seed_len..];
 
         // create a seed matcher
-        let matcher = shift_and::ShiftAnd::new(seed);
-
-        for occ in matcher.find_all(&seq[..seq.len() - seed_len]) {
+        let matcher = memmem::Finder::new(seed);
+        let search = &seq[..seq.len() - seed_len];
+        let mut next = 0;
+        while let Some(relative) = matcher.find(&search[next..]) {
+            let occ = next + relative;
+            // Preserve overlapping seed occurrences.
+            next = occ + 1;
             let successor_seed = &seq[..occ + seed_len];
             let starter_seed = &seq[seq.len() - successor_seed.len()..];
 
             // compare the potential overlap to the seed
-            let dist = hamming(starter_seed, successor_seed);
-
             // compute the maximum distance allowed for the overlap
             let max_dist = match self.overlap_min_identity {
                 Some(identity) => {
@@ -73,6 +91,26 @@ impl Monomerizer {
                         - (successor_seed.len() as f64 * identity).floor() as u64
                 }
                 None => self.overlap_dist.unwrap_or(0),
+            };
+
+            let dist = if log::log_enabled!(log::Level::Debug) {
+                hamming(starter_seed, successor_seed)
+            } else if max_dist == 0 {
+                // Equality uses optimized slice comparison and stops at a mismatch.
+                u64::from(starter_seed != successor_seed)
+            } else {
+                let mut distance = 0;
+                let chunk_size = self.mismatch_chunk_size.get();
+                for (left, right) in starter_seed
+                    .chunks(chunk_size)
+                    .zip(successor_seed.chunks(chunk_size))
+                {
+                    distance += hamming(left, right);
+                    if distance > max_dist {
+                        break;
+                    }
+                }
+                distance
             };
 
             debug!(
@@ -494,10 +532,8 @@ mod test {
     }
 
     mod sensitive {
-        use crate::canonicalize;
-
         use super::*;
-        use pretty_assertions::{assert_eq, assert_ne};
+        use pretty_assertions::assert_eq;
 
         #[test]
         fn sensitive_monomerization() {
@@ -527,7 +563,7 @@ mod test {
                         .seed_len(10)
                         .build()
                         .unwrap();
-                    prop_assert_eq!(m.clone().monomerize(concatenated.as_bytes()), input.as_bytes());
+                    prop_assert_eq!(m.monomerize(concatenated.as_bytes()), input.as_bytes());
                     // prop_assert_eq!(m.clone().monomerize_sensitive(concatenated.as_bytes()), input.as_bytes());
                 }
                 #[test]

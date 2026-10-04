@@ -4,6 +4,8 @@ use predicates::prelude::*;
 use std::collections::HashMap;
 use std::process::Command; // Run programs // Used for writing assertions // Add methods on commands
 
+// Some integration suites import this module for its other shared helpers.
+#[allow(dead_code)]
 pub fn check_fasta(directory: &str, cmd: &mut Command) -> anyhow::Result<()> {
     let file = std::path::Path::new("tests/examples")
         .join(directory)

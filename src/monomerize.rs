@@ -1,9 +1,11 @@
 use anyhow::bail;
-use seq_io::{fasta::Record, parallel::parallel_fasta};
+use seq_io::fasta::Record;
 
 use crate::{
     commands::Command,
-    utils::{input_to_reader, output_to_writer, table_path_to_writer},
+    utils::{
+        input_to_reader, normalized_sequence, output_to_writer, process_fasta, table_path_to_writer,
+    },
 };
 
 #[derive(serde::Serialize)]
@@ -29,8 +31,10 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
             keep_all,
             table,
             threads,
-            batch_size,
+            mismatch_chunk_size,
+            processing,
         } => {
+            let settings = processing.resolve(*threads, 64)?;
             // region: some basic sanity checks
             if max_mismatch.is_some() && min_identity.is_some() {
                 bail!("cannot specify both max_mismatch and min_identity");
@@ -52,6 +56,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             // set the seed length
             builder.seed_len((*seed_length).try_into().expect("Seed length is too large"));
+            builder.mismatch_chunk_size(*mismatch_chunk_size);
 
             // set the maximum mismatch count
             if let Some(max_mismatch) = *max_mismatch {
@@ -65,16 +70,12 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             let monomerizer = builder.build().unwrap();
 
-            parallel_fasta(
+            process_fasta(
                 reader,
-                *threads,
-                *batch_size,
+                settings,
                 |record, idx| {
                     // normalize the sequence
-                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
-                        Some(x) => x,
-                        None => record.seq().to_vec(),
-                    };
+                    let normalized = normalized_sequence(record.seq());
 
                     // make sure the sequence is at least as long as the seed length and the minimum length
                     if normalized.len() < monomerizer.seed_len || normalized.len() < *min_length {

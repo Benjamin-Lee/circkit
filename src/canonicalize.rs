@@ -1,8 +1,8 @@
 use crate::{
     commands::Command,
-    utils::{input_to_reader, output_to_writer},
+    utils::{canonicalization_input, normalized_sequence, output_to_writer, process_fasta},
 };
-use seq_io::{fasta::Record, parallel::parallel_fasta};
+use seq_io::fasta::Record;
 
 pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
     match cmd {
@@ -10,30 +10,36 @@ pub fn canonicalize(cmd: &Command) -> anyhow::Result<()> {
             input,
             output,
             threads,
+            processing,
+            rotation,
         } => {
-            let reader = input_to_reader(input)?;
+            let (reader, settings) = canonicalization_input(input, output, processing, *threads)?;
+            let reuse_buffers = settings.serial;
+            let rotation = circkit::canonicalize::RotationOptions {
+                duval_max_len: rotation.rotation_cutoff,
+            };
             let mut writer = output_to_writer(output)?;
 
-            parallel_fasta(
+            process_fasta(
                 reader,
-                *threads,
-                64,
-                |record, seq| {
+                settings,
+                |record, data: &mut (Vec<u8>, Vec<u8>)| {
                     // runs in worker
 
-                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
-                        Some(x) => x,
-                        None => record.seq().to_vec(),
-                    };
-
-                    *seq = circkit::canonicalize(&normalized);
+                    let normalized = normalized_sequence(record.seq());
+                    if reuse_buffers {
+                        rotation.canonicalize_into(&normalized, &mut data.0, &mut data.1);
+                    } else {
+                        data.0 = rotation.canonicalize(&normalized);
+                        data.1 = Vec::new();
+                    }
                 },
-                |record, seq| {
+                |record, data| {
                     // runs in main thread
                     writer.write_all(b">").unwrap();
                     writer.write_all(record.head()).unwrap();
                     writer.write_all(b"\n").unwrap();
-                    writer.write_all(seq).unwrap();
+                    writer.write_all(&data.0).unwrap();
                     writer.write_all(b"\n").unwrap();
 
                     // Some(value) will stop the reader, and the value will be returned.

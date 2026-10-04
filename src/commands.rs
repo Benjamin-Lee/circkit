@@ -1,7 +1,44 @@
-use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use clap::{Args, Parser, Subcommand};
+use std::{num::NonZeroUsize, path::PathBuf};
 
 use crate::orfs::Strand;
+
+#[derive(clap::ArgEnum, Clone, Copy, Debug, PartialEq)]
+pub enum Execution {
+    Auto,
+    Serial,
+    Pipeline,
+}
+
+impl std::fmt::Display for Execution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Auto => "auto",
+            Self::Serial => "serial",
+            Self::Pipeline => "pipeline",
+        })
+    }
+}
+
+#[derive(Args, Debug)]
+pub struct ProcessingOptions {
+    /// FASTA buffers queued in the pipeline. Defaults to 64, or max(2, 2*threads) for orfs.
+    #[clap(long, alias = "batch-size")]
+    pub queue_depth: Option<NonZeroUsize>,
+
+    /// Execution strategy. Auto uses serial processing for one worker on one available CPU,
+    /// or for single-worker canonicalize/uniq with uncompressed input and output.
+    /// Serial requires --threads 1; pipeline overlaps reading, processing, and writing.
+    #[clap(long, arg_enum, default_value_t = Execution::Auto)]
+    pub execution: Execution,
+}
+
+#[derive(Args, Debug)]
+pub struct RotationOptions {
+    /// Maximum sequence length for allocating Duval search. Zero always uses constant-space search.
+    #[clap(long, default_value_t = circkit::canonicalize::RotationOptions::default().duval_max_len)]
+    pub rotation_cutoff: usize,
+}
 
 #[derive(Parser)]
 #[clap(name = "circkit", author, version, about, long_about = None)]
@@ -82,11 +119,15 @@ pub enum Command {
 
         /// The number of threads to use.
         /// If not specified, the number of logical cores is used.
-        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap(), value_parser = clap::value_parser!(u32).range(1..))]
         threads: u32,
 
-        #[clap(long, hidden = true, default_value_t = 64)]
-        batch_size: usize,
+        /// Bytes checked between early mismatch rejections. Does not change matching criteria.
+        #[clap(long, default_value_t = circkit::Monomerizer::default().mismatch_chunk_size)]
+        mismatch_chunk_size: NonZeroUsize,
+
+        #[clap(flatten)]
+        processing: ProcessingOptions,
     },
     /// Concatenate sequences to themselves
     Cat {
@@ -119,8 +160,14 @@ pub enum Command {
 
         /// The number of threads to use.
         /// If not specified, the number of logical cores is used.
-        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap(), value_parser = clap::value_parser!(u32).range(1..))]
         threads: u32,
+
+        #[clap(flatten)]
+        processing: ProcessingOptions,
+
+        #[clap(flatten)]
+        rotation: RotationOptions,
     },
     /// Deduplicate circular sequences
     Uniq {
@@ -144,8 +191,14 @@ pub enum Command {
         table: Option<PathBuf>,
 
         /// The number of threads to use. If not specified, the number of logical cores is used.
-        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap(), value_parser = clap::value_parser!(u32).range(1..))]
         threads: u32,
+
+        #[clap(flatten)]
+        processing: ProcessingOptions,
+
+        #[clap(flatten)]
+        rotation: RotationOptions,
     },
 
     /// Rotate circular sequences to the left or right
@@ -240,7 +293,10 @@ pub enum Command {
 
         /// The number of threads to use.
         /// If not specified, the number of logical cores is used.
-        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap())]
+        #[clap(short, long, default_value_t = num_cpus::get().try_into().unwrap(), value_parser = clap::value_parser!(u32).range(1..))]
         threads: u32,
+
+        #[clap(flatten)]
+        processing: ProcessingOptions,
     },
 }

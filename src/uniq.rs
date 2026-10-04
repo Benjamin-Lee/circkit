@@ -1,9 +1,12 @@
 use crate::{
     commands::Command,
-    utils::{input_to_reader, output_to_writer, table_path_to_writer},
+    utils::{
+        canonicalization_input, normalized_sequence, output_to_writer, process_fasta,
+        table_path_to_writer,
+    },
 };
 use nohash_hasher::BuildNoHashHasher;
-use seq_io::{fasta::Record, parallel::parallel_fasta};
+use seq_io::fasta::Record;
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(serde::Serialize)]
@@ -20,29 +23,35 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
             canonicalize,
             table,
             threads,
+            processing,
+            rotation,
         } => {
-            let reader = input_to_reader(input)?;
+            let (reader, settings) = canonicalization_input(input, output, processing, *threads)?;
+            let reuse_buffers = settings.serial;
+            let rotation = circkit::canonicalize::RotationOptions {
+                duval_max_len: rotation.rotation_cutoff,
+            };
             let mut writer = output_to_writer(output)?;
             let mut table_writer = table_path_to_writer(table);
             let mut seen = HashMap::<u64, String, BuildNoHashHasher<u64>>::default();
 
-            parallel_fasta(
+            process_fasta(
                 reader,
-                *threads,
-                64,
-                |record, canonicalized| {
+                settings,
+                |record, data: &mut (Vec<u8>, Vec<u8>)| {
                     // runs in worker
-                    let normalized = match needletail::sequence::normalize(record.seq(), false) {
-                        Some(x) => x,
-                        None => record.seq().to_vec(),
-                    };
-
-                    *canonicalized = circkit::canonicalize(&normalized);
+                    let normalized = normalized_sequence(record.seq());
+                    if reuse_buffers {
+                        rotation.canonicalize_into(&normalized, &mut data.0, &mut data.1);
+                    } else {
+                        data.0 = rotation.canonicalize(&normalized);
+                        data.1 = Vec::new();
+                    }
                 },
-                |record, canonicalized| {
+                |record, data| {
                     // runs in main thread
 
-                    let canonicalized_hash = xxhash_rust::xxh3::xxh3_64(canonicalized);
+                    let canonicalized_hash = xxhash_rust::xxh3::xxh3_64(&data.0);
 
                     match seen.entry(canonicalized_hash) {
                         Entry::Vacant(entry) => {
@@ -53,7 +62,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                             writer.write_all(b"\n").unwrap();
                             match canonicalize {
                                 true => {
-                                    writer.write_all(canonicalized).unwrap();
+                                    writer.write_all(&data.0).unwrap();
                                 }
                                 false => {
                                     writer.write_all(record.seq()).unwrap();
