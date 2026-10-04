@@ -17,10 +17,12 @@ pub fn rotate(cmd: &Command) -> anyhow::Result<()> {
         } => {
             let mut reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
+            let mut scratch = Vec::new();
 
             while let Some(record) = reader.next() {
                 let record = record?;
-                let length = crate::io::sequence_len(&record);
+                let sequence = crate::io::joined_sequence(&record, &mut scratch);
+                let length = sequence.len();
 
                 let new_start_index = match percent {
                     Some(percent) => {
@@ -51,8 +53,8 @@ pub fn rotate(cmd: &Command) -> anyhow::Result<()> {
                     (_, false) => (new_start_index.unsigned_abs() % length as u64) as usize,
                 };
 
-                crate::io::write_sequence_range(&mut writer, &record, rotation_index..length)?;
-                crate::io::write_sequence_range(&mut writer, &record, 0..rotation_index)?;
+                writer.write_all(&sequence[rotation_index..])?;
+                writer.write_all(&sequence[..rotation_index])?;
                 writer.write_all(b"\n")?;
             }
             writer.finish()?;

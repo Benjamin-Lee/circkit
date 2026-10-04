@@ -54,6 +54,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
             let mut table_writer = table_path_to_writer(table, *table_format)?;
+            let mut scratch = Vec::new();
 
             let mut builder = circkit::monomerize::Monomerizer::builder();
 
@@ -92,8 +93,8 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                     }
                 },
                 |record, idx| {
-                    // Count sequence bytes without joining wrapped lines.
-                    let full_length = crate::io::sequence_len(&record);
+                    let sequence = crate::io::joined_sequence(&record, &mut scratch);
+                    let full_length = sequence.len();
 
                     // region: check the monomer is long enough, either absolute or relative to the original sequence
 
@@ -136,7 +137,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
                         writer.write_all(b">")?;
                         writer.write_all(record.head())?;
                         writer.write_all(b"\n")?;
-                        crate::io::write_sequence_range(&mut writer, &record, 0..end_idx)?;
+                        writer.write_all(&sequence[..end_idx])?;
                         writer.write_all(b"\n")?;
 
                         // write the table file if it was requested

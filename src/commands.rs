@@ -168,7 +168,7 @@ pub enum Command {
         /// Using this flag will roughly double the runtime, since each sequence must now be processed twice.
         sensitive: bool,
 
-        /// The length of the seed to search for.
+        /// The length of the seed to search for (5 to 64 bases).
         /// Must be less than or equal to the length of the sequence but should be much smaller to be meaningful
         #[arg(long, default_value = "10", value_parser = clap::value_parser!(u64).range(5..=64))]
         seed_length: u64,
@@ -179,7 +179,7 @@ pub enum Command {
         /// Conflicts with --min-identity
         max_mismatch: Option<u64>,
 
-        /// The minimum identity the overlapping region before being considered mismatched.
+        /// The minimum identity of the overlapping region (a fraction between 0 and 1).
         /// Conflicts with --max-mismatch
         #[arg(long, conflicts_with = "overlap_cutoffs", value_parser = parse_fraction)]
         min_identity: Option<f64>,
@@ -190,7 +190,7 @@ pub enum Command {
         #[arg(long)]
         min_overlap: Option<usize>,
 
-        /// Minimum length of the overlap (relative to the input sequence) to require.
+        /// Minimum overlap relative to the input sequence, as a finite nonnegative ratio.
         /// A value of 1.0 means that the sequence must be a complete dimer.
         /// Can be used with --min-overlap for more stringent filtering.
         /// If --keep-all is used, sequences with too short of an overlap are still output but as the original sequence.
@@ -328,7 +328,7 @@ pub enum Command {
         #[arg(short, long, value_hint = clap::ValueHint::FilePath)]
         output: Option<PathBuf>,
 
-        /// The number of bases to rotate the sequence. Positive numbers rotate to the right, negative numbers rotate to the left.
+        /// The nonzero number of bases to rotate the sequence. Positive numbers rotate to the right, negative numbers rotate to the left.
         /// Rotation by amounts greater than the sequence length are equivalent to rotation by the remainder of the division of the rotation amount by the sequence length.
         /// For example, rotating a sequence of length 100 by 101 bases is equivalent to rotating by 1 base.
         /// This flag is mutually exclusive with --percent.
@@ -336,7 +336,7 @@ pub enum Command {
             conflicts_with = "percent")]
         bases: Option<i64>,
 
-        /// The percentage of the sequence to rotate.
+        /// The finite, nonzero fraction of the sequence to rotate.
         /// This must be expressed as a decimal, e.g. 0.5 for 50%.
         /// This flag is mutually exclusive with --bases.
         #[arg(short, long, allow_hyphen_values = true, value_parser = parse_percent,
@@ -392,7 +392,7 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = Strand::Both)]
         strand: Strand,
 
-        /// The minimum ORF length to sequence length ratio to keep.
+        /// The minimum ORF length to sequence length ratio to keep (finite and nonnegative).
         /// A ratio of 1 means that the ORF is as long as the sequence.
         /// A ratio of 2 means that the ORF would wrap around the origin twice.
         /// The stop codon is included in the length calculation regardless of the --include-stop flag.

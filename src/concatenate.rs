@@ -13,17 +13,16 @@ pub fn concatenate(cmd: &Command) -> anyhow::Result<()> {
         Command::Cat { input, output } => {
             let mut reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
+            let mut scratch = Vec::new();
 
             while let Some(record) = reader.next() {
                 let record = record?;
                 writer.write_all(b">")?;
                 writer.write_all(record.head())?;
                 writer.write_all(b"\n")?;
-                for _ in 0..2 {
-                    for line in record.seq_lines() {
-                        writer.write_all(line)?;
-                    }
-                }
+                let sequence = crate::io::joined_sequence(&record, &mut scratch);
+                writer.write_all(sequence)?;
+                writer.write_all(sequence)?;
                 writer.write_all(b"\n")?;
             }
 
@@ -40,17 +39,15 @@ pub fn deconcatenate(cmd: &Command) -> anyhow::Result<()> {
         Command::Decat { input, output } => {
             let mut reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
+            let mut scratch = Vec::new();
 
             while let Some(record) = reader.next() {
                 let record = record?;
                 writer.write_all(b">")?;
                 writer.write_all(record.head())?;
                 writer.write_all(b"\n")?;
-                crate::io::write_sequence_range(
-                    &mut writer,
-                    &record,
-                    0..crate::io::sequence_len(&record) / 2,
-                )?;
+                let sequence = crate::io::joined_sequence(&record, &mut scratch);
+                writer.write_all(&sequence[..sequence.len() / 2])?;
                 writer.write_all(b"\n")?;
             }
 

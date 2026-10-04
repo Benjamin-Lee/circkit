@@ -53,8 +53,8 @@ metadata file (or a compressed representation of an empty file).
 
 | Command | Fields | Meaning |
 | --- | --- | --- |
-| `monomerize` | `id`, `original_length`, `monomer_length` | One row per retained sequence. ID is the first header token. |
-| `uniq` | `id`, `duplicate_id` | One row per discarded duplicate, referring to the retained representative ID. |
+| `monomerize` | `id`, `original_length`, `monomer_length` | One row per retained sequence. ID is the full header. |
+| `uniq` | `id`, `duplicate_id` | One row per discarded duplicate, referring to the retained representative ID (first header token). |
 | `orfs` | `orf_id`, `seq_id`, `start`, `stop`, `length`, `wraps`, `ratio` | One row per output ORF. IDs use the full FASTA header. |
 
 Metadata identifiers must be UTF-8; FASTA-only processing accepts byte headers.
@@ -122,6 +122,10 @@ and nonnegative. Minimum lengths/wrap counts cannot exceed their maxima; wrap
 counts range from 0 to 3. Codon lists accept comma-separated DNA triplets using
 A/C/G/T/N, normalize case and surrounding spaces, and reject malformed entries.
 N matches a literal N, not a wildcard.
+
+`orfs --strand reverse` searches and outputs only reverse-strand ORFs; earlier
+versions also included forward-strand ORFs in that mode. Default `both` behavior
+and the ORF matching algorithms are unchanged.
 
 `canon` aliases `canonicalize`; `--min-overlap-ratio` aliases the existing
 `--min-overlap-percent` flag. `--batch-size` remains a queue-depth alias, and

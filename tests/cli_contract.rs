@@ -586,3 +586,58 @@ fn closed_metadata_stdout_preserves_pipe_handling_for_csv_and_jsonl() {
         assert!(result.stderr.is_empty(), "{format}: {result:?}");
     }
 }
+
+#[test]
+fn orf_strand_selection_restricts_fasta_and_metadata_in_both_execution_modes() {
+    let directory = assert_fs::TempDir::new().unwrap();
+    let input = b">forward\nATGAAATAA\n>reverse\nTTATTTCAT\n";
+    for mode in ["serial", "pipeline"] {
+        for (strand, headers) in [
+            ("forward", vec!["forward_ORF0"]),
+            ("reverse", vec!["reverse_RC_ORF0"]),
+            ("both", vec!["forward_ORF0", "reverse_RC_ORF0"]),
+        ] {
+            let table = directory.path().join("orfs.jsonl");
+            let output = Command::cargo_bin("circkit")
+                .unwrap()
+                .args([
+                    "orfs",
+                    "--threads",
+                    "1",
+                    "--execution",
+                    mode,
+                    "--min-length",
+                    "0",
+                    "--max-wraps",
+                    "0",
+                    "--include-stop",
+                    "--strand",
+                    strand,
+                    "--table",
+                ])
+                .arg(&table)
+                .write_stdin(input.to_vec())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{strand}: {output:?}");
+            let fasta = String::from_utf8(output.stdout).unwrap();
+            let actual: Vec<_> = fasta
+                .lines()
+                .filter_map(|line| line.strip_prefix('>'))
+                .collect();
+            assert_eq!(actual, headers, "{mode} {strand}");
+            for sequence in fasta.lines().filter(|line| !line.starts_with('>')) {
+                assert_eq!(sequence, "ATGAAATAA");
+            }
+            let metadata = std::fs::read_to_string(table).unwrap();
+            let actual: Vec<String> = metadata
+                .lines()
+                .map(|line| {
+                    let row: Value = serde_json::from_str(line).unwrap();
+                    row["orf_id"].as_str().unwrap().to_owned()
+                })
+                .collect();
+            assert_eq!(actual, headers, "{mode} {strand} metadata");
+        }
+    }
+}

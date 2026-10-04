@@ -2,12 +2,11 @@
 use crate::commands::TableFormat;
 use anyhow::{Context, Result};
 use niffler::send::compression::Format;
-use seq_io::fasta::{Reader, RefRecord};
+use seq_io::fasta::{Reader, Record, RefRecord};
 use serde::Serialize;
 use std::{
     fs::File,
     io::{self, BufReader, BufWriter, IsTerminal, Read, StdoutLock, Write},
-    ops::Range,
     path::{Path, PathBuf},
 };
 
@@ -251,6 +250,12 @@ pub struct OutputWriter {
 }
 
 impl Write for OutputWriter {
+    fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.buffer
+            .write_all(bytes)
+            .map_err(|error| output_error(error, &self.destination, self.stdout))
+    }
+
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.buffer
             .write(bytes)
@@ -405,25 +410,18 @@ pub fn sequence_len(record: &RefRecord<'_>) -> usize {
     record.seq_lines().map(|line| line.len()).sum()
 }
 
-pub(crate) fn write_sequence_range(
-    writer: &mut impl Write,
-    record: &RefRecord<'_>,
-    range: Range<usize>,
-) -> io::Result<()> {
-    let mut offset = 0;
-    for line in record.seq_lines() {
-        let next = offset + line.len();
-        if next > range.start && offset < range.end {
-            writer.write_all(
-                &line[range.start.saturating_sub(offset)..line.len().min(range.end - offset)],
-            )?;
+/// Borrow single-line records and reuse one buffer for wrapped records. Larger
+/// contiguous writes are faster than sending each short FASTA line separately.
+pub(crate) fn joined_sequence<'a>(record: &'a RefRecord<'_>, scratch: &'a mut Vec<u8>) -> &'a [u8] {
+    if record.num_seq_lines() <= 1 {
+        record.seq()
+    } else {
+        scratch.clear();
+        for line in record.seq_lines() {
+            scratch.extend_from_slice(line);
         }
-        if next >= range.end {
-            break;
-        }
-        offset = next;
+        scratch
     }
-    Ok(())
 }
 
 #[cfg(test)]

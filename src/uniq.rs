@@ -77,11 +77,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                                     writer.write_all(&data.0)?;
                                 }
                                 false => {
-                                    crate::io::write_sequence_range(
-                                        &mut writer,
-                                        &record,
-                                        0..crate::io::sequence_len(&record),
-                                    )?;
+                                    writer.write_all(record.seq())?;
                                 }
                             };
                             writer.write_all(b"\n")?;

@@ -62,21 +62,25 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                 |record, orfs: &mut (Vec<circkit::orfs::Orf>, Vec<circkit::orfs::Orf>, Vec<u8>)| {
                     // runs in worker
                     let normalized = normalized_sequence(record.seq());
-                    let (starts, stops) = matcher.indices(&normalized);
+                    orfs.0 = if *strand != Strand::Reverse {
+                        let (starts, stops) = matcher.indices(&normalized);
 
-                    let mut all_orfs =
-                        circkit::orfs::find_orfs_with_indices(normalized.len(), starts, stops);
+                        let mut all_orfs =
+                            circkit::orfs::find_orfs_with_indices(normalized.len(), starts, stops);
 
-                    // length filtering, stop codon requirement (with optional bypass), and wrap filtering
-                    all_orfs.retain(|orf| {
-                        (orf.length - 3 >= *min_length)
-                            && (*no_stop_required || orf.stop.is_some())
-                            && (*min_wraps <= orf.wraps)
-                            && (orf.wraps <= *max_wraps)
-                            && (orf.length as f64 / normalized.len() as f64 >= *min_ratio)
-                    });
+                        // length filtering, stop codon requirement (with optional bypass), and wrap filtering
+                        all_orfs.retain(|orf| {
+                            (orf.length - 3 >= *min_length)
+                                && (*no_stop_required || orf.stop.is_some())
+                                && (*min_wraps <= orf.wraps)
+                                && (orf.wraps <= *max_wraps)
+                                && (orf.length as f64 / normalized.len() as f64 >= *min_ratio)
+                        });
 
-                    orfs.0 = circkit::orfs::longest_orfs(&mut all_orfs);
+                        circkit::orfs::longest_orfs(&mut all_orfs)
+                    } else {
+                        Vec::new()
+                    };
 
                     orfs.1 = if *strand == Strand::Both || *strand == Strand::Reverse {
                         orfs.2 = bio::alphabets::dna::revcomp(normalized.as_ref());
