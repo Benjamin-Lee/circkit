@@ -49,7 +49,7 @@ pub fn orfs(cmd: &Command) -> anyhow::Result<()> {
                 processing.resolve(*threads, (*threads as usize).saturating_mul(2).max(2))?;
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
-            let mut table_writer = table_path_to_writer(table, *table_format)?;
+            let mut table_writer = table_path_to_writer(table, *table_format, output)?;
 
             // Step 1: Find all stop and start codons by frame
             let start_codons = start_codons.split(',').collect::<Vec<_>>();

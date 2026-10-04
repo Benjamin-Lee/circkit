@@ -53,7 +53,7 @@ pub fn monomerize(cmd: &Command) -> anyhow::Result<()> {
 
             let reader = input_to_reader(input)?;
             let mut writer = output_to_writer(output)?;
-            let mut table_writer = table_path_to_writer(table, *table_format)?;
+            let mut table_writer = table_path_to_writer(table, *table_format, output)?;
             let mut scratch = Vec::new();
 
             let mut builder = circkit::monomerize::Monomerizer::builder();

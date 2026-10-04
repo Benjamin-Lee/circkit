@@ -375,10 +375,20 @@ impl MetadataWriter {
 pub fn table_path_to_writer(
     table: &Option<PathBuf>,
     format: Option<TableFormat>,
+    fasta_output: &Option<PathBuf>,
 ) -> Result<Option<MetadataWriter>> {
     let Some(path) = table else {
         return Ok(None);
     };
+    // FASTA output now exists, so filesystem identity also catches previously
+    // nonexistent aliases on case-insensitive or Unicode-normalizing volumes.
+    if let Some(output) = fasta_output.as_deref().filter(|output| !is_stdio(output)) {
+        if !is_stdio(path) && same_path(output, path).context("check metadata output path")? {
+            return Err(crate::diagnostics::argument_error(
+                "FASTA and metadata outputs must be different files",
+            ));
+        }
+    }
     let suffix_path = if output_compression_format(table) == Format::No {
         path.clone()
     } else {

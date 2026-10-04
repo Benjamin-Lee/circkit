@@ -35,7 +35,7 @@ pub fn uniq(cmd: &Command) -> anyhow::Result<()> {
                 duval_max_len: rotation.rotation_cutoff,
             };
             let mut writer = output_to_writer(output)?;
-            let mut table_writer = table_path_to_writer(table, *table_format)?;
+            let mut table_writer = table_path_to_writer(table, *table_format, output)?;
             let mut seen = HashMap::<u64, String, BuildNoHashHasher<u64>>::default();
 
             process_fasta(

@@ -648,3 +648,41 @@ fn orf_strand_selection_restricts_fasta_and_metadata_in_both_execution_modes() {
         }
     }
 }
+
+#[test]
+fn future_output_aliases_respect_filesystem_case_sensitivity() {
+    let directory = assert_fs::TempDir::new().unwrap();
+    let output = directory.path().join("Result.fasta");
+    let table = directory.path().join("result.fasta");
+    // Probe the filesystem rather than infer its behavior from the OS.
+    std::fs::write(&output, b"probe").unwrap();
+    let case_insensitive = table.exists();
+    std::fs::remove_file(&output).unwrap();
+    let result = Command::cargo_bin("circkit")
+        .unwrap()
+        .args([
+            "uniq",
+            "--threads",
+            "1",
+            "--table-format",
+            "jsonl",
+            "--error-format",
+            "json",
+            "-o",
+        ])
+        .arg(&output)
+        .arg("--table")
+        .arg(&table)
+        .write_stdin(">one\nACGT\n>two\nACGT\n")
+        .output()
+        .unwrap();
+    if case_insensitive {
+        json_error(&result, 2, "invalid_arguments");
+        assert_eq!(std::fs::read(output).unwrap(), b"");
+    } else {
+        assert!(result.status.success(), "{result:?}");
+        assert_eq!(std::fs::read(output).unwrap(), b">one\nACGT\n");
+        let row: Value = serde_json::from_slice(&std::fs::read(table).unwrap()).unwrap();
+        assert_eq!(row["duplicate_id"], "two");
+    }
+}

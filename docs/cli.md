@@ -24,8 +24,9 @@ deduplication, and ORF finding normalize sequences as before. `cat`, `decat`, an
 `rotate` preserve sequence bytes. `decat` keeps the first half, rounding down.
 
 Input and output files must be distinct, including symbolic and hard links. FASTA
-and metadata outputs must also differ. These checks run before any output is
-opened. Named output files are overwritten; output is streamed, so an error may
+and metadata outputs must also differ. Paths are checked before opening FASTA
+output and again before opening metadata, including aliases resolved by the
+filesystem. Named output files are overwritten; output is streamed, so an error may
 leave partial output. Check the exit status before accepting results.
 
 Output is buffered and stdout is locked for processing. Compressed output is
