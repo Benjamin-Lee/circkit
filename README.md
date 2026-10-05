@@ -1,6 +1,7 @@
 # circKit
 
-circKit is a library for manipulating circular biological sequences such as DNA and RNA.
+circKit is a command-line toolkit and Rust library for manipulating circular
+biological sequences such as DNA and RNA.
 
 ## Features
 
@@ -9,6 +10,17 @@ circKit is a library for manipulating circular biological sequences such as DNA 
 - Inputs and outputs can be gzip, bzip2, xz, or zstd compressed
 - Streaming FASTA with CSV, TSV, or JSONL metadata
 - Shell completions, JSON command discovery, and structured errors for automation
+
+## Installation
+
+See the [installation guide](docs/install.md) for Linux/macOS binaries, Cargo
+installation, and source builds. After the first crates.io release:
+
+```sh
+cargo install circkit-cli --version 0.1.0 --locked
+```
+
+The executable is `circkit`; the separate Rust library is the `circkit` crate.
 
 ## Usage
 
@@ -78,20 +90,12 @@ GCAT
 
 We define the canonical representation as the lexicographically smallest rotation of either polarity. In other words, we compute the sequence rotation that would come first in the alphabet for each polarity (known as the [lexicographically minimal string rotation](https://en.wikipedia.org/wiki/Lexicographically_minimal_string_rotation)). Then we simply compare the LMSRs for each polarity and return the one that comes first in the alphabet. So, in the example above, the normalized representation is `ATGC`.
 
-## Roadmap
+## Project scope
 
-There's still a lot to do before an initial release.
-Here's how it's going:
-
-- [x] `rotate`
-- [x] `cat`
-- [x] `decat`
-- [x] `canonicalize`
-- [x] `monomerize`
-- [x] `orfs`
-- [ ] ~~`grep`~~ (use `seqkit grep` instead)
-- [ ] `cluster` (future)
-- [ ] `prealign` (future)
+The toolkit provides rotation, concatenation/deconcatenation, canonicalization,
+deduplication, monomer detection, and circular ORF extraction. Use `seqkit grep`
+for sequence filtering. Clustering and prealignment are possible future
+extensions rather than requirements for this release.
 
 ## Benchmarks
 
@@ -102,3 +106,8 @@ PR #2 baseline with the current checkout on the same machine.
 ## See Also
 
 - [vdsearch](https://github.com/Benjamin-Lee/vdsearch): A tool for searching for viroid-like sequences. Eventually, `circkit` be used for all of the data manipulation tasks.
+
+## License and releases
+
+Licensed under [MIT](LICENSE). Maintainers: see the
+[release procedure](docs/releasing.md) for package verification and publishing.

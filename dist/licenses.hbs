@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>circkit dependency licenses</title>
+<h1>circkit dependency licenses</h1>
+<p>Licenses for the Rust dependency graph. Additional bundled native library
+and runtime notices are in the licenses directory.</p>
+{{#each licenses}}
+<h2>{{name}}</h2>
+<ul>{{#each used_by}}<li>{{crate.name}} {{crate.version}}</li>{{/each}}</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</html>

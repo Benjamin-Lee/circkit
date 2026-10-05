@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub mod canonicalize;
 pub mod monomerize;
 pub use crate::canonicalize::canonicalize;

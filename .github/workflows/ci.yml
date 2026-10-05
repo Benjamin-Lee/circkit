@@ -1,97 +1,59 @@
-# Based on https://github.com/actions-rs/meta/blob/master/recipes/quickstart.md
-#
-# While our "example" application has the platform-specific code,
-# for simplicity we are compiling and testing everything on the Ubuntu environment only.
-# For multi-OS testing see the `cross.yml` workflow.
+name: CI
 
 on: [push, pull_request]
 
-name: CI
+permissions:
+  contents: read
 
 jobs:
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Run cargo check for CLI
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-
-      - name: Run cargo check for library
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --manifest-path=lib/Cargo.toml
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Check locked workspace
+        run: cargo +stable check --workspace --all-targets --locked
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Run cargo test for CLI
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-
-      - name: Run cargo test for library
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path=lib/Cargo.toml
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Test locked workspace
+        run: cargo +stable test --workspace --locked
+      - name: Test portable benchmark reports
+        run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
 
   lints:
     name: Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
-
-      - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+          persist-credentials: false
+      - name: Install stable lint tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Check formatting and all targets/features
+        run: |
+          cargo +stable fmt --all -- --check
+          cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings
 
   minimum-rust:
     name: Minimum Rust (1.85)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Install minimum CLI toolchain
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install minimum toolchain
         run: rustup toolchain install 1.85.0 --profile minimal
       - name: Check locked workspace on minimum Rust
-        run: cargo +1.85.0 check --workspace --all-targets --locked
+        run: cargo +1.85.0 check --workspace --all-targets --all-features --locked
