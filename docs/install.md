@@ -11,14 +11,20 @@ The initial release will appear there after publication.
 
 | Computer | Target in the archive filename |
 | --- | --- |
-| Linux, Intel/AMD 64-bit | `x86_64-unknown-linux-musl` |
-| Linux, ARM 64-bit | `aarch64-unknown-linux-musl` |
+| Linux, Intel/AMD 64-bit (glibc 2.28+) | `x86_64-unknown-linux-gnu` |
+| Linux, ARM 64-bit (glibc 2.28+) | `aarch64-unknown-linux-gnu` |
+| Alpine/older Linux, Intel/AMD 64-bit | `x86_64-unknown-linux-musl` |
+| Alpine/older Linux, ARM 64-bit | `aarch64-unknown-linux-musl` |
 | macOS, Intel | `x86_64-apple-darwin` |
 | macOS, Apple Silicon | `aarch64-apple-darwin` |
 
 Run `uname -s` and `uname -m` if you are unsure. macOS binaries require macOS 11
-or newer. Linux binaries include their C runtime and compression libraries;
-they work on glibc and musl distributions without installing those libraries.
+or newer. All builds bundle compression libraries. GNU/Linux is recommended
+for glibc 2.28+ distributions (including Ubuntu 20.04+, Debian 10+, RHEL 8+,
+and Amazon Linux 2023). Use `ldd --version` to check your libc. Musl builds are
+fully static and also work on Alpine and older glibc distributions. Their
+allocator can be substantially slower for multithreaded, allocation-heavy
+workloads; choose GNU/Linux when available. Cargo builds use your native libc.
 The CPU instruction set is the target's baseline, with AVX2 selected only when
 available at runtime. Windows users can use the Linux binaries under WSL2.
 
@@ -45,7 +51,9 @@ gh attestation verify ARCHIVE.tar.gz --repo Benjamin-Lee/circkit
 
 Each archive includes a CLI guide, a JSON command catalog, shell completions,
 and `build.json` recording the source commit, target, compiler, and binary hash.
-Generate fresh discovery data with `circkit schema` or `circkit completions zsh`.
+The packaged schema records build-host defaults; `circkit schema` reports
+defaults for your current machine. Generate completions with
+`circkit completions zsh`.
 See [the CLI guide](cli.md) for completion installation and streaming examples.
 
 macOS binaries have the normal ad hoc signature produced by the Rust linker;

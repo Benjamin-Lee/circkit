@@ -10,8 +10,10 @@ Linux and macOS, each on x86-64 and ARM64. The binary matrix and pinned release
 compiler live in [dist/config.toml](../dist/config.toml). Release tooling needs
 Python 3.12+; end users do not need Python or Rust for downloaded binaries.
 
-Linux uses musl and bundled compression libraries; CI rejects binaries with a
-dynamic loader or shared-library dependencies. macOS targets version 11 and
+GNU/Linux builds use digest-pinned manylinux 2.28 containers, with bundled
+compression libraries. CI rejects non-system dependencies and glibc symbol
+requirements above 2.28. Static musl builds provide an additional compatibility
+option; CI rejects a dynamic loader or shared-library dependencies in those builds. macOS targets version 11 and
 bundles non-system codecs; CI rejects dependencies outside standard system
 paths. No `target-cpu=native` flags are used. Each archive is extracted and
 tested for canonicalization, monomers/JSONL metadata, command discovery,
@@ -19,6 +21,11 @@ completions, and round trips through gzip, bzip2, xz, and zstd.
 
 Archives contain MIT licensing for circkit, a generated dependency license
 report, bundled native codec notices, and the Rust toolchain's runtime notices.
+GNU builds preserve the host glibc allocator, which can be much faster than
+musl for multithreaded short-read processing. Choose GNU/Linux on supported
+distributions and musl for Alpine/older Linux. This changes distribution
+choices rather than algorithm tuning.
+
 The license generator and its download checksum are pinned in the release
 config. Update `dist/native-licenses` when changing bundled native codecs.
 
@@ -43,7 +50,7 @@ driver. The full checkout tests still run on every release target.
    ```
 
 4. Wait for **Release packages** to pass. It creates a **draft** GitHub release
-   with four native binary archives, two `.crate` archives, checksums, and
+   with six native binary archives, two `.crate` archives, checksums, and
    provenance attestations. Review its artifacts and notes. It does not publish
    crates or make the draft public. A failed job creates no draft release.
 5. Publish the initial crates locally from the tagged checkout. crates.io needs

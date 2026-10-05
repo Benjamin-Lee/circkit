@@ -48,7 +48,7 @@ def sha256(path):
 
 
 def check_linkage(binary, target):
-    """Reject dynamic Linux binaries and non-system macOS dependencies."""
+    """Check the libc baseline and reject unbundled codec dependencies."""
     architecture = target.split("-", 1)[0]
     native = {"arm64": "aarch64", "AMD64": "x86_64"}.get(platform.machine(), platform.machine())
     if architecture != native:
@@ -58,12 +58,32 @@ def check_linkage(binary, target):
         dynamic = run("readelf", "-d", str(binary)).decode()
         if "INTERP" in headers or "NEEDED" in dynamic:
             raise ValueError("Linux release binary must be fully static")
+    elif target.endswith("linux-gnu"):
+        dynamic = run("readelf", "-d", str(binary)).decode()
+        libraries = re.findall(r"Shared library: \[(.*?)\]", dynamic)
+        system = {"libc.so.6", "libm.so.6", "libpthread.so.0", "libdl.so.2", "librt.so.1", "libgcc_s.so.1",
+                  "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1"}
+        if set(libraries) - system:
+            raise ValueError(f"unbundled Linux dependency: {set(libraries) - system}")
+        symbols = run("readelf", "--version-info", str(binary)).decode()
+        versions = [tuple(map(int, version.split("."))) for version in re.findall(r"GLIBC_([\d.]+)", symbols)]
+        _, config = configuration()
+        maximum = tuple(map(int, config["glibc_maximum"].split(".")))
+        if not versions or max(versions) > maximum:
+            raise ValueError(f"GNU/Linux binary must require at most glibc {config['glibc_maximum']}")
     else:
         libraries = run("otool", "-L", str(binary)).decode().splitlines()[1:]
         for library in libraries:
             name = library.strip().split(" (", 1)[0]
             if not name.startswith(("/usr/lib/", "/System/Library/")):
                 raise ValueError(f"unbundled macOS dependency: {name}")
+        commands = run("otool", "-l", str(binary)).decode()
+        minimums = re.findall(r"\bminos ([\d.]+)", commands)
+        minimums += re.findall(r"cmd LC_VERSION_MIN_MACOSX\s+cmdsize \d+\s+version ([\d.]+)", commands)
+        _, config = configuration()
+        allowed = tuple(map(int, config["macos_deployment_target"].split(".")))
+        if not minimums or any(tuple(map(int, value.split(".")[:2])) > allowed for value in minimums):
+            raise ValueError("macOS binary exceeds the configured deployment target")
 
 
 def smoke(binary, version):
@@ -133,6 +153,7 @@ def pack(binary, target, output, licenses):
         metadata = {"version": version, "target": target, "commit": commit,
                     "binary_sha256": sha256(binary), "rustc": run("rustc", "-vV").decode(),
                     "features": ["static-codecs"],
+                    "glibc_minimum": config["glibc_maximum"] if target.endswith("linux-gnu") else None,
                     "macos_minimum": config["macos_deployment_target"] if "apple" in target else None}
         (stage / "build.json").write_text(json.dumps(metadata, indent=2) + "\n")
         # Normalize archive order, timestamps, ownership and permissions.

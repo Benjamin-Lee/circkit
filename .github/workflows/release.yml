@@ -69,6 +69,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
     env:
       RELEASE_RUST: ${{ needs.plan.outputs.rust }}
       RELEASE_TARGET: ${{ matrix.target }}
@@ -81,14 +82,23 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: '!matrix.container'
         with:
           python-version: '3.12'
       - name: Install native musl compiler and codec test tools
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.container
         run: |
           sudo apt-get update
           sudo apt-get install --yes musl-tools zstd xz-utils bzip2 gzip
           echo 'CC=musl-gcc' >> "$GITHUB_ENV"
+      - name: Prepare pinned glibc baseline container
+        if: matrix.container
+        run: |
+          dnf install --yes zstd gzip bzip2 xz
+          echo '/opt/python/cp312-cp312/bin' >> "$GITHUB_PATH"
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-init.sh"
+          sh "$RUNNER_TEMP/rustup-init.sh" -y --profile minimal --default-toolchain "$RELEASE_RUST"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install pinned release toolchain
         run: |
           rustup toolchain install "$RELEASE_RUST" --profile minimal --target "$RELEASE_TARGET"
@@ -134,6 +144,8 @@ jobs:
         run: |
           cargo publish --workspace --dry-run --locked
           cargo test --manifest-path target/package/circkit-$(python3 -c 'import tomllib; print(tomllib.load(open("lib/Cargo.toml", "rb"))["package"]["version"])')/Cargo.toml --locked
+          # The publishing dry run cleans its temporary archives; retain packages for download.
+          cargo package --workspace --locked
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-crates
