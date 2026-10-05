@@ -1,8 +1,10 @@
 Tools and Rust algorithms for circular DNA and RNA sequences: canonicalization,
 deduplication, monomer detection, rotation, and ORFs crossing the sequence origin.
 
-Download the archive matching your OS and CPU. GNU/Linux builds require glibc 2.28+ and are recommended for performance.
-Static musl builds also support Alpine and older glibc distributions; macOS binaries require macOS 11 or newer. Every archive includes the
+Download the archive matching your OS and CPU. GNU/Linux builds require glibc
+2.28+ and are recommended for performance. Static musl builds also support
+Alpine and older glibc distributions; macOS binaries require macOS 11 or newer.
+Every archive includes the
 `circkit` executable, installation instructions, CLI guide, command schema,
 shell completions, and build metadata.
 

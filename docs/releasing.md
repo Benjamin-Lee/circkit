@@ -13,7 +13,8 @@ Python 3.12+; end users do not need Python or Rust for downloaded binaries.
 GNU/Linux builds use digest-pinned manylinux 2.28 containers, with bundled
 compression libraries. CI rejects non-system dependencies and glibc symbol
 requirements above 2.28. Static musl builds provide an additional compatibility
-option; CI rejects a dynamic loader or shared-library dependencies in those builds. macOS targets version 11 and
+option; CI rejects a dynamic loader or shared-library dependencies in those
+builds. macOS targets version 11 and
 bundles non-system codecs; CI rejects dependencies outside standard system
 paths. No `target-cpu=native` flags are used. Each archive is extracted and
 tested for canonicalization, monomers/JSONL metadata, command discovery,
