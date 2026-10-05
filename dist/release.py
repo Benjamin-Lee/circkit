@@ -129,8 +129,10 @@ def pack(binary, target, output, licenses):
     output.mkdir(parents=True, exist_ok=True)
     name = f"circkit-{version}-{target}"
     archive = output / f"{name}.tar.gz"
-    commit = run("git", "-C", str(ROOT), "rev-parse", "HEAD").decode().strip()
-    epoch = int(run("git", "-C", str(ROOT), "show", "-s", "--format=%ct", "HEAD"))
+    # Container checkouts can be owned by the runner UID. Trust only this source directory.
+    git = ("git", "-c", f"safe.directory={ROOT}", "-C", str(ROOT))
+    commit = run(*git, "rev-parse", "HEAD").decode().strip()
+    epoch = int(run(*git, "show", "-s", "--format=%ct", "HEAD"))
     with tempfile.TemporaryDirectory(prefix="circkit-pack-") as temporary:
         stage = Path(temporary) / name
         (stage / "bin").mkdir(parents=True)
@@ -241,7 +243,8 @@ def main():
         else:
             manifest(args.output)
     except (ValueError, subprocess.CalledProcessError) as error:
-        parser.exit(1, f"release check failed: {error}\n")
+        detail = error.stderr.decode(errors="replace") if isinstance(error, subprocess.CalledProcessError) and error.stderr else ""
+        parser.exit(1, f"release check failed: {error}\n{detail}")
 
 
 if __name__ == "__main__":
