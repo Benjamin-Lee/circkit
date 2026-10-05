@@ -1,0 +1,2 @@
+# Retain upstream license notices verbatim, including their original whitespace.
+dist/native-licenses/*.txt -whitespace

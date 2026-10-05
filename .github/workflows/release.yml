@@ -1,0 +1,212 @@
+name: Release packages
+
+on:
+  pull_request:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Release metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      rust: ${{ steps.plan.outputs.rust }}
+      macos_minimum: ${{ steps.plan.outputs.macos_minimum }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Validate metadata and release tag
+        id: plan
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: |
+          python3 dist/release.py check --tag "$RELEASE_TAG" > plan.json
+          if [ -n "$RELEASE_TAG" ]; then
+            git merge-base --is-ancestor HEAD origin/main
+          fi
+          python3 - <<'PY'
+          import json, os
+          plan = json.load(open('plan.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('matrix=' + json.dumps({'include': plan['include']}) + '\n')
+              output.write('rust=' + plan['rust'] + '\n')
+              output.write('macos_minimum=' + plan['macos_minimum'] + '\n')
+          PY
+      - name: Test release checks
+        run: python3 -m unittest discover -s dist -p 'test_*.py'
+      - name: Generate complete dependency license notices
+        env:
+          RELEASE_RUST: ${{ steps.plan.outputs.rust }}
+        run: |
+          rustup toolchain install "$RELEASE_RUST" --profile minimal
+          rustup default "$RELEASE_RUST"
+          python3 dist/fetch-license-tool.py
+          target/release-tools/cargo-about generate --workspace --all-features --locked --fail --config dist/about.toml dist/licenses.hbs --output-file target/THIRD-PARTY-LICENSES.html
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-licenses
+          path: target/THIRD-PARTY-LICENSES.html
+          if-no-files-found: error
+
+  binaries:
+    name: Package (${{ matrix.target }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    env:
+      RELEASE_RUST: ${{ needs.plan.outputs.rust }}
+      RELEASE_TARGET: ${{ matrix.target }}
+      MACOSX_DEPLOYMENT_TARGET: ${{ needs.plan.outputs.macos_minimum }}
+      # Use the target's baseline CPU; AVX2 remains runtime-detected.
+      RUSTFLAGS: ''
+      CFLAGS: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: '!matrix.container'
+        with:
+          python-version: '3.12'
+      - name: Install native musl compiler and codec test tools
+        if: runner.os == 'Linux' && !matrix.container
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools zstd xz-utils bzip2 gzip
+          echo 'CC=musl-gcc' >> "$GITHUB_ENV"
+      - name: Prepare pinned glibc baseline container
+        if: matrix.container
+        run: |
+          dnf install -y zstd gzip bzip2 xz
+          echo '/opt/python/cp312-cp312/bin' >> "$GITHUB_PATH"
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-init.sh"
+          sh "$RUNNER_TEMP/rustup-init.sh" -y --profile minimal --default-toolchain "$RELEASE_RUST"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Install pinned release toolchain
+        run: |
+          rustup toolchain install "$RELEASE_RUST" --profile minimal --target "$RELEASE_TARGET"
+          rustup default "$RELEASE_RUST"
+          rustc -vV
+      - name: Test native release target and scalar fallback
+        run: |
+          cargo test --workspace --locked --target "$RELEASE_TARGET" --features static-codecs
+          cargo test --locked --target "$RELEASE_TARGET" --features static-codecs,scalar-normalization --test performance_normalize
+      - name: Build and verify the installed archive
+        run: cargo build --release --locked --bin circkit --target "$RELEASE_TARGET" --features static-codecs
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dependency-licenses
+          path: target/licenses
+      - name: Package and verify the installed archive
+        run: |
+          python3 dist/release.py pack --binary "target/$RELEASE_TARGET/release/circkit" --target "$RELEASE_TARGET" --licenses target/licenses/THIRD-PARTY-LICENSES.html
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-${{ matrix.target }}
+          path: target/dist/*
+          if-no-files-found: error
+
+  crates:
+    name: Verify crates.io packages
+    needs: plan
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_RUST: ${{ needs.plan.outputs.rust }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install pinned release toolchain
+        run: |
+          rustup toolchain install "$RELEASE_RUST" --profile minimal
+          rustup default "$RELEASE_RUST"
+      - name: Verify both crates without publishing
+        run: |
+          cargo publish --workspace --dry-run --locked
+          cargo test --manifest-path target/package/circkit-$(python3 -c 'import tomllib; print(tomllib.load(open("lib/Cargo.toml", "rb"))["package"]["version"])')/Cargo.toml --locked
+          # The publishing dry run cleans its temporary archives; retain packages for download.
+          cargo package --workspace --locked
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-crates
+          path: target/package/*.crate
+          if-no-files-found: error
+
+  assemble:
+    name: Release manifest
+    needs: [plan, binaries, crates]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: package-*
+          path: target/dist
+          merge-multiple: true
+      - name: Verify complete release manifest
+        run: python3 dist/release.py manifest target/dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-bundle
+          path: target/dist/*
+          if-no-files-found: error
+
+  draft:
+    name: Draft GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: assemble
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-bundle
+          path: target/dist
+      - name: Attest tested release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            target/dist/*.tar.gz
+            target/dist/*.crate
+      - name: Create or update a draft release
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft > release.json 2>/dev/null; then
+            python3 -c 'import json; assert json.load(open("release.json"))["isDraft"], "Published releases cannot be overwritten"'
+            gh release upload "$RELEASE_TAG" target/dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" target/dist/* --draft --verify-tag --title "circkit $RELEASE_TAG" --notes-file dist/release-notes.md
+          fi
